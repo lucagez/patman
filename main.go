@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -96,39 +97,65 @@ func handleNotMatchLine(line, command string) string {
 	return ""
 }
 
-func main() {
-	startIndex := 1
-	var reader io.ReadCloser
+func handleName(line, command string) string {
+	return command
+}
 
-	if len(os.Args)-1 < startIndex {
-		fmt.Println("not enough arguments")
-		fmt.Println(usage)
-		os.Exit(1)
-	}
+var input string
+var index string
+
+func init() {
+	flag.StringVar(&input, "file", "", "input file")
+	flag.StringVar(&index, "index", "", "index used to aggregate matches")
+}
+
+func main() {
+	flag.Parse()
+
+	var reader io.ReadCloser
 
 	stdinInfo, _ := os.Stdin.Stat()
 	if stdinInfo.Size() > 0 {
 		reader = os.Stdin
 	}
 
-	_, err := os.Lstat(os.Args[1])
+	_, err := os.Lstat(input)
 	if err == nil {
-		reader, _ = os.Open(os.Args[1])
-		startIndex = 2
+		reader, _ = os.Open(input)
 	}
 
-	if len(os.Args)-1 < startIndex {
-		fmt.Println("not enough arguments")
-		fmt.Println(usage)
-		os.Exit(1)
+	// PIPELINE
+	var pipelines [][]string
+	for _, raw := range os.Args {
+		if !strings.Contains(raw, "|>") {
+			continue
+		}
+		if !strings.Contains(raw, "name:") {
+			// TODO: replace with stderr around
+			fmt.Fprintf(os.Stderr, "missing `name` operand in `%s` pipeline\n", raw)
+			os.Exit(1)
+		}
+
+		var cmds []string
+		for _, cmd := range strings.Split(raw, "|>") {
+			cmds = append(cmds, strings.TrimSpace(cmd))
+		}
+		pipelines = append(pipelines, cmds)
 	}
+
+	// shouldAggregate := index != ""
+
+	// var buffer map[string][]string
 
 	if reader != nil {
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
-			match := handle(scanner.Text(), startIndex)
-			if match != "" {
-				fmt.Println(match)
+			text := scanner.Text()
+			for _, pipeline := range pipelines {
+				match, name := handle(text, pipeline)
+				if match != "" {
+					fmt.Println(name, match)
+				}
 			}
 		}
 	}
@@ -138,9 +165,10 @@ func main() {
 	}
 }
 
-func handle(line string, argIndex int) string {
+func handle(line string, cmds []string) (string, string) {
 	match := ""
-	arg := os.Args[argIndex]
+	name := ""
+	arg := cmds[0]
 
 	switch {
 	case strings.HasPrefix(arg, "match:"):
@@ -163,14 +191,17 @@ func handle(line string, argIndex int) string {
 		match = handleNotMatchLine(line, strings.Replace(arg, "notmatchline:", "", 1))
 	case strings.HasPrefix(arg, "nml:"):
 		match = handleNotMatchLine(line, strings.Replace(arg, "nml:", "", 1))
+	case strings.HasPrefix(arg, "name:"):
+		name = handleName(line, strings.Replace(arg, "name:", "", 1))
+		match = line
 	default:
 		fmt.Println(usage)
 		os.Exit(1)
 	}
 
-	if argIndex+1 < len(os.Args) {
-		return handle(match, argIndex+1)
+	if len(cmds) > 1 {
+		return handle(match, cmds[1:])
 	}
 
-	return match
+	return match, name
 }

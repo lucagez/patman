@@ -1,0 +1,9 @@
+{"trace_id":123, "amount": 5000}
+{"trace_id":567, "amount": 345}
+{"trace_id":567, "user": "Santa Claus"}
+{"trace_id":123, "user": "Lara Croft"}
+{"trace_id":987, "amount": 765432}
+{"trace_id":  123, "amount": 5000}
+{"trace_id": 111, "user": "Mario Rossi"}
+{"trace_id": 987, "user": "Dummy"}
+{"trace_id": 111, "amount": 1234}
