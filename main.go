@@ -2,12 +2,15 @@ package main
 
 import (
 	"bufio"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/tidwall/sjson"
 )
 
 // RIPARTIRE QUI!<---
@@ -102,11 +105,13 @@ func handleName(line, command string) string {
 }
 
 var input string
-var index string
+var format string
+var pipelines [][]string
+var pipelineNames []string
 
 func init() {
 	flag.StringVar(&input, "file", "", "input file")
-	flag.StringVar(&index, "index", "", "index used to aggregate matches")
+	flag.StringVar(&format, "format", "stdout", "format to be used for output, pipelines are printed in order")
 }
 
 func main() {
@@ -124,44 +129,107 @@ func main() {
 		reader, _ = os.Open(input)
 	}
 
-	// PIPELINE
-	var pipelines [][]string
-	for _, raw := range os.Args {
-		if !strings.Contains(raw, "|>") {
+	for _, raw := range os.Args[1:] {
+		if !regexp.MustCompile(`^\w+:`).MatchString(raw) {
 			continue
-		}
-		if !strings.Contains(raw, "name:") {
-			// TODO: replace with stderr around
-			fmt.Fprintf(os.Stderr, "missing `name` operand in `%s` pipeline\n", raw)
-			os.Exit(1)
 		}
 
 		var cmds []string
 		for _, cmd := range strings.Split(raw, "|>") {
-			cmds = append(cmds, strings.TrimSpace(cmd))
+			trimmed := strings.TrimSpace(cmd)
+			cmds = append(cmds, trimmed)
+			if strings.HasPrefix(trimmed, "name:") {
+				pipelineNames = append(pipelineNames, strings.TrimPrefix(trimmed, "name:"))
+			}
 		}
 		pipelines = append(pipelines, cmds)
 	}
-
-	// shouldAggregate := index != ""
-
-	// var buffer map[string][]string
 
 	if reader != nil {
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
 			text := scanner.Text()
+			var results [][]string // match, name
+
 			for _, pipeline := range pipelines {
 				match, name := handle(text, pipeline)
 				if match != "" {
-					fmt.Println(name, match)
+					results = append(results, []string{match, name})
 				}
+			}
+
+			if format == "stdout" {
+				handleStdoutPrint(results)
+			}
+			if format == "json" {
+				handleJsonPrint(results)
+			}
+			if format == "csv" {
+				handleCsvPrint(results)
 			}
 		}
 	}
 
 	if reader != nil {
 		reader.Close()
+	}
+}
+
+var csvWriter *csv.Writer
+
+func handleCsvPrint(results [][]string) {
+	if len(pipelineNames) != len(pipelines) {
+		// TODO: better error
+		fmt.Println("all pipelines must be named")
+		os.Exit(1)
+	}
+
+	if csvWriter == nil {
+		csvWriter = csv.NewWriter(os.Stdout)
+		csvWriter.Write(pipelineNames)
+	}
+
+	record := make([]string, len(pipelineNames))
+	for _, result := range results {
+		match := result[0]
+		name := result[1]
+
+		for i, pipelineName := range pipelineNames {
+			if name == pipelineName {
+				record[i] = match
+			}
+		}
+	}
+
+	csvWriter.Write(record)
+	csvWriter.Flush()
+}
+
+func handleJsonPrint(results [][]string) {
+	json := "{}"
+	for _, result := range results {
+		match := result[0]
+		name := result[1]
+		if name == "" {
+			// TODO: This error should happen before parsing?
+			fmt.Println("cannot set json without named pipeline")
+			os.Exit(1)
+		}
+		json, _ = sjson.Set(json, name, match)
+	}
+	fmt.Println(json)
+}
+
+func handleStdoutPrint(results [][]string) {
+	for i, result := range results {
+		match := strings.TrimSpace(result[0])
+		fmt.Print(match)
+		if i != len(results)-1 {
+			fmt.Print(" ")
+		}
+	}
+	if len(results) > 0 {
+		fmt.Print("\n")
 	}
 }
 
@@ -199,7 +267,7 @@ func handle(line string, cmds []string) (string, string) {
 		os.Exit(1)
 	}
 
-	if len(cmds) > 1 {
+	if len(cmds) > 1 && match != "" {
 		return handle(match, cmds[1:])
 	}
 
