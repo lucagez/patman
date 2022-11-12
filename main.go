@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/dop251/goja"
 	"github.com/tidwall/sjson"
 )
 
@@ -94,6 +95,31 @@ func handleNotMatchLine(line, command string) string {
 		return line
 	}
 	return ""
+}
+
+var vm *goja.Runtime
+
+func handleJs(line, command string) string {
+	if vm == nil {
+		vm = goja.New()
+	}
+
+	if !strings.HasPrefix(command, ".") {
+		command = "." + command
+	}
+
+	// TODO: Should probably escape
+	script := fmt.Sprintf("String(`%s`%s)", line, command)
+	v, err := vm.RunString(script)
+	if err != nil {
+		fmt.Println("error while executing js pipeline:")
+		fmt.Println(" ", err)
+		fmt.Println("")
+		fmt.Println(" ", "pipeline 👉", command)
+		fmt.Println(" ", "on line 👉", line)
+		os.Exit(1)
+	}
+	return v.Export().(string)
 }
 
 func handleName(line, command string) string {
@@ -251,6 +277,8 @@ func handle(line string, cmds []string) (string, string) {
 		match = handleNotMatchLine(line, strings.Replace(arg, "notmatchline:", "", 1))
 	case strings.HasPrefix(arg, "nml:"):
 		match = handleNotMatchLine(line, strings.Replace(arg, "nml:", "", 1))
+	case strings.HasPrefix(arg, "js:"):
+		match = handleJs(line, strings.Replace(arg, "js:", "", 1))
 	case strings.HasPrefix(arg, "name:"):
 		name = handleName(line, strings.Replace(arg, "name:", "", 1))
 		match = line
