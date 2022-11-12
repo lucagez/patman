@@ -2,17 +2,14 @@ package patman
 
 import (
 	"bufio"
-	"encoding/csv"
 	"flag"
 	"fmt"
 	"os"
 	"regexp"
 	"strings"
-
-	"github.com/tidwall/sjson"
 )
 
-// TODO: create better usage
+// TODO: create better usage message
 var usage = strings.Join([]string{
 	"Usage of pattern:",
 	"pattern [...commands]",
@@ -37,16 +34,24 @@ var usage = strings.Join([]string{
 
 var input string
 var format string
+var help bool
 var pipelines [][]string
 var pipelineNames []string
 
 func init() {
 	flag.StringVar(&input, "file", "", "input file")
 	flag.StringVar(&format, "format", "stdout", "format to be used for output, pipelines are printed in order")
+	flag.BoolVar(&help, "help", false, "shows help message")
+	flag.BoolVar(&help, "h", false, "shows help message")
 }
 
 func Run() {
 	flag.Parse()
+
+	if help {
+		fmt.Println(usage)
+		os.Exit(0)
+	}
 
 	for _, raw := range os.Args[1:] {
 		if !regexp.MustCompile(`^\w+:`).MatchString(raw) {
@@ -61,6 +66,26 @@ func Run() {
 				pipelineNames = append(pipelineNames, strings.TrimPrefix(trimmed, "name:"))
 			}
 		}
+
+		for _, cmd := range cmds {
+			knownOperator := false
+
+			for operator := range transformers {
+				if operator == strings.Split(cmd, ":")[0] {
+					knownOperator = true
+				}
+			}
+
+			if strings.HasPrefix(cmd, "name:") {
+				knownOperator = true
+			}
+
+			if !knownOperator {
+				fmt.Printf("`%s` is an unknown operator\n", cmd)
+				os.Exit(1)
+			}
+		}
+
 		pipelines = append(pipelines, cmds)
 	}
 
@@ -82,14 +107,10 @@ func Run() {
 			}
 		}
 
-		if format == "stdout" {
-			handleStdoutPrint(results)
-		}
-		if format == "json" {
-			handleJsonPrint(results)
-		}
-		if format == "csv" {
-			handleCsvPrint(results)
+		for name, printer := range printers {
+			if name == format {
+				printer(results)
+			}
 		}
 	}
 
@@ -99,70 +120,6 @@ func Run() {
 
 	if openFileErr == nil {
 		f.Close()
-	}
-}
-
-var csvWriter *csv.Writer
-
-func handleCsvPrint(results [][]string) {
-	if len(pipelineNames) != len(pipelines) {
-		// TODO: better error
-		fmt.Println("all pipelines must be named")
-		os.Exit(1)
-	}
-
-	if csvWriter == nil {
-		csvWriter = csv.NewWriter(os.Stdout)
-		csvWriter.Write(pipelineNames)
-	}
-
-	empty := true
-	record := make([]string, len(pipelineNames))
-	for _, result := range results {
-		match := result[0]
-		name := result[1]
-
-		for i, pipelineName := range pipelineNames {
-			if name == pipelineName {
-				empty = false
-				record[i] = match
-			}
-		}
-	}
-
-	if !empty {
-		csvWriter.Write(record)
-		csvWriter.Flush()
-	}
-}
-
-func handleJsonPrint(results [][]string) {
-	json := "{}"
-	for _, result := range results {
-		match := result[0]
-		name := result[1]
-		if name == "" {
-			// TODO: This error should happen before parsing?
-			fmt.Println("cannot set json without named pipeline")
-			os.Exit(1)
-		}
-		json, _ = sjson.Set(json, name, match)
-	}
-	if json != "{}" {
-		fmt.Println(json)
-	}
-}
-
-func handleStdoutPrint(results [][]string) {
-	for i, result := range results {
-		match := strings.TrimSpace(result[0])
-		fmt.Print(match)
-		if i != len(results)-1 {
-			fmt.Print(" ")
-		}
-	}
-	if len(results) > 0 {
-		fmt.Print("\n")
 	}
 }
 

@@ -9,7 +9,9 @@ import (
 	"github.com/dop251/goja"
 )
 
-var transformers = map[string]func(string, string) string{
+type transformer func(line string, arg string) string
+
+var transformers = map[string]transformer{
 	"match":        handleMatch,
 	"m":            handleMatch,
 	"matchall":     handleMatchAll,
@@ -23,8 +25,8 @@ var transformers = map[string]func(string, string) string{
 	"js":           handleJs,
 }
 
-func Register(name string, transformer func(line string, arg string) string) {
-	transformers[name] = transformer
+func Register(name string, t transformer) {
+	transformers[name] = t
 }
 
 func handleMatch(line, command string) string {
