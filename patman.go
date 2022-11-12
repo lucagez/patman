@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dop251/goja"
 	"github.com/tidwall/sjson"
 )
 
@@ -35,96 +34,6 @@ var usage = strings.Join([]string{
 	"notmatchline, nml: returns entire lines that do not match expression",
 	"  e.g. cat test.txt | matchline:hello -> ...all matching lines",
 }, "\n")
-
-func handleMatch(line, command string) string {
-	// TODO: Possible to optimize by caching regexes. PAY ATTENTION TO REGEXP SHENANIGANS
-	regex, err := regexp.Compile(command)
-	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", command)
-		os.Exit(1)
-	}
-
-	return regex.FindString(line)
-}
-
-func handleMatchAll(line, command string) string {
-	regex, err := regexp.Compile(command)
-	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", command)
-		os.Exit(1)
-	}
-
-	matches := ""
-	for _, match := range regex.FindAllString(line, -1) {
-		matches += match
-	}
-
-	return matches
-}
-
-func handleReplace(line, command string) string {
-	cmds := strings.Split(command, "/")
-	regex, err := regexp.Compile(cmds[0])
-	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", cmds[0])
-		os.Exit(1)
-	}
-
-	return regex.ReplaceAllString(line, cmds[1])
-}
-
-func handleMatchLine(line, command string) string {
-	regex, err := regexp.Compile(command)
-	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", command)
-		os.Exit(1)
-	}
-	if regex.MatchString(line) {
-		return line
-	}
-	return ""
-}
-
-func handleNotMatchLine(line, command string) string {
-	regex, err := regexp.Compile(command)
-	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", command)
-		os.Exit(1)
-	}
-	if !regex.MatchString(line) {
-		return line
-	}
-	return ""
-}
-
-var vm *goja.Runtime
-
-func handleJs(line, command string) string {
-	if vm == nil {
-		vm = goja.New()
-	}
-
-	if !strings.HasPrefix(command, ".") {
-		command = "." + command
-	}
-
-	// TODO: Should probably escape
-	script := fmt.Sprintf("String(`%s`%s)", line, command)
-	v, err := vm.RunString(script)
-	if err != nil {
-		fmt.Println("error while executing js pipeline:")
-		fmt.Println(" ", err)
-		fmt.Println("")
-		fmt.Println(" ", "pipeline 👉", command)
-		fmt.Println(" ", "on line 👉", line)
-		os.Exit(1)
-	}
-	return v.Export().(string)
-}
-
-func handleName(line, command string) string {
-	return command
-}
 
 var input string
 var format string
@@ -262,35 +171,23 @@ func handle(line string, cmds []string) (string, string) {
 	name := ""
 	arg := cmds[0]
 
-	switch {
-	case strings.HasPrefix(arg, "match:"):
-		match = handleMatch(line, strings.Replace(arg, "match:", "", 1))
-	case strings.HasPrefix(arg, "m:"):
-		match = handleMatch(line, strings.Replace(arg, "m:", "", 1))
-	case strings.HasPrefix(arg, "matchall:"):
-		match = handleMatchAll(line, strings.Replace(arg, "matchall:", "", 1))
-	case strings.HasPrefix(arg, "ma:"):
-		match = handleMatchAll(line, strings.Replace(arg, "ma:", "", 1))
-	case strings.HasPrefix(arg, "replace:"):
-		match = handleReplace(line, strings.Replace(arg, "replace:", "", 1))
-	case strings.HasPrefix(arg, "r:"):
-		match = handleReplace(line, strings.Replace(arg, "r:", "", 1))
-	case strings.HasPrefix(arg, "matchline:"):
-		match = handleMatchLine(line, strings.Replace(arg, "matchline:", "", 1))
-	case strings.HasPrefix(arg, "ml:"):
-		match = handleMatchLine(line, strings.Replace(arg, "ml:", "", 1))
-	case strings.HasPrefix(arg, "notmatchline:"):
-		match = handleNotMatchLine(line, strings.Replace(arg, "notmatchline:", "", 1))
-	case strings.HasPrefix(arg, "nml:"):
-		match = handleNotMatchLine(line, strings.Replace(arg, "nml:", "", 1))
-	case strings.HasPrefix(arg, "js:"):
-		match = handleJs(line, strings.Replace(arg, "js:", "", 1))
-	case strings.HasPrefix(arg, "name:"):
-		name = handleName(line, strings.Replace(arg, "name:", "", 1))
+	for operator, transformer := range transformers {
+		prefix := fmt.Sprintf("%s:", operator)
+		if strings.HasPrefix(arg, prefix) {
+			match = transformer(line, strings.TrimPrefix(arg, prefix))
+		}
+
+		// to allow cases where custom operators do
+		// not plan on using arguments.
+		// just for a more convenient syntax
+		if arg == operator {
+			match = transformer(line, operator)
+		}
+	}
+
+	if strings.HasPrefix(arg, "name:") {
+		name = strings.Replace(arg, "name:", "", 1)
 		match = line
-	default:
-		fmt.Println(usage)
-		os.Exit(1)
 	}
 
 	if len(cmds) > 1 && match != "" {
