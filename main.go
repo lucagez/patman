@@ -5,7 +5,6 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -13,10 +12,7 @@ import (
 	"github.com/tidwall/sjson"
 )
 
-// RIPARTIRE QUI!<---
-// - How to implement pipelines??
-// - Ideally to parse data into pipelines. e.g. pattern -pipeline traceId 'm:trace_id":"(\d+)' -pipeline amount 'm:amount(\d+)' -out json -> {"traceId": 123, "amount": 345}, ...
-
+// TODO: create better usage
 var usage = strings.Join([]string{
 	"Usage of pattern:",
 	"pattern [...commands]",
@@ -117,18 +113,6 @@ func init() {
 func main() {
 	flag.Parse()
 
-	var reader io.ReadCloser
-
-	stdinInfo, _ := os.Stdin.Stat()
-	if stdinInfo.Size() > 0 {
-		reader = os.Stdin
-	}
-
-	_, err := os.Lstat(input)
-	if err == nil {
-		reader, _ = os.Open(input)
-	}
-
 	for _, raw := range os.Args[1:] {
 		if !regexp.MustCompile(`^\w+:`).MatchString(raw) {
 			continue
@@ -145,33 +129,41 @@ func main() {
 		pipelines = append(pipelines, cmds)
 	}
 
-	if reader != nil {
-		scanner := bufio.NewScanner(reader)
-		for scanner.Scan() {
-			text := scanner.Text()
-			var results [][]string // match, name
+	scanner := bufio.NewScanner(os.Stdin)
 
-			for _, pipeline := range pipelines {
-				match, name := handle(text, pipeline)
-				if match != "" {
-					results = append(results, []string{match, name})
-				}
-			}
+	f, openFileErr := os.Open(input)
+	if openFileErr == nil {
+		scanner = bufio.NewScanner(f)
+	}
 
-			if format == "stdout" {
-				handleStdoutPrint(results)
+	for scanner.Scan() {
+		text := scanner.Text()
+		var results [][]string // match, name
+
+		for _, pipeline := range pipelines {
+			match, name := handle(text, pipeline)
+			if match != "" {
+				results = append(results, []string{match, name})
 			}
-			if format == "json" {
-				handleJsonPrint(results)
-			}
-			if format == "csv" {
-				handleCsvPrint(results)
-			}
+		}
+
+		if format == "stdout" {
+			handleStdoutPrint(results)
+		}
+		if format == "json" {
+			handleJsonPrint(results)
+		}
+		if format == "csv" {
+			handleCsvPrint(results)
 		}
 	}
 
-	if reader != nil {
-		reader.Close()
+	if err := scanner.Err(); err != nil {
+		panic(err)
+	}
+
+	if openFileErr == nil {
+		f.Close()
 	}
 }
 
