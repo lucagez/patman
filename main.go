@@ -1,4 +1,4 @@
-package main
+package patman
 
 import (
 	"bufio"
@@ -136,7 +136,7 @@ func init() {
 	flag.StringVar(&format, "format", "stdout", "format to be used for output, pipelines are printed in order")
 }
 
-func main() {
+func Run() {
 	flag.Parse()
 
 	for _, raw := range os.Args[1:] {
@@ -207,6 +207,7 @@ func handleCsvPrint(results [][]string) {
 		csvWriter.Write(pipelineNames)
 	}
 
+	empty := true
 	record := make([]string, len(pipelineNames))
 	for _, result := range results {
 		match := result[0]
@@ -214,13 +215,16 @@ func handleCsvPrint(results [][]string) {
 
 		for i, pipelineName := range pipelineNames {
 			if name == pipelineName {
+				empty = false
 				record[i] = match
 			}
 		}
 	}
 
-	csvWriter.Write(record)
-	csvWriter.Flush()
+	if !empty {
+		csvWriter.Write(record)
+		csvWriter.Flush()
+	}
 }
 
 func handleJsonPrint(results [][]string) {
@@ -235,7 +239,9 @@ func handleJsonPrint(results [][]string) {
 		}
 		json, _ = sjson.Set(json, name, match)
 	}
-	fmt.Println(json)
+	if json != "{}" {
+		fmt.Println(json)
+	}
 }
 
 func handleStdoutPrint(results [][]string) {
