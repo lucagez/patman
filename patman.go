@@ -33,6 +33,7 @@ var usage = strings.Join([]string{
 }, "\n")
 
 var input string
+var index string
 var format string
 var help bool
 var pipelines [][]string
@@ -40,6 +41,7 @@ var pipelineNames []string
 
 func init() {
 	flag.StringVar(&input, "file", "", "input file")
+	flag.StringVar(&index, "index", "", "index property used to aggregate logs")
 	flag.StringVar(&format, "format", "stdout", "format to be used for output, pipelines are printed in order")
 	flag.BoolVar(&help, "help", false, "shows help message")
 	flag.BoolVar(&help, "h", false, "shows help message")
@@ -89,6 +91,20 @@ func Run() {
 		pipelines = append(pipelines, cmds)
 	}
 
+	if index != "" {
+		indexPipeline := false
+		for _, name := range pipelineNames {
+			if name == index {
+				indexPipeline = true
+			}
+		}
+
+		if !indexPipeline {
+			fmt.Printf("index `%s` must have a matching named pipeline\n", index)
+			os.Exit(1)
+		}
+	}
+
 	scanner := bufio.NewScanner(os.Stdin)
 
 	f, openFileErr := os.Open(input)
@@ -96,21 +112,30 @@ func Run() {
 		scanner = bufio.NewScanner(f)
 	}
 
-	for scanner.Scan() {
-		text := scanner.Text()
-		var results [][]string // match, name
+	var print printer
+	for name, p := range printers {
+		if name == format {
+			print = p
+		}
+	}
 
+	for scanner.Scan() {
+		var results [][]string // match, name
 		for _, pipeline := range pipelines {
-			match, name := handle(text, pipeline)
+			match, name := handle(scanner.Text(), pipeline)
 			if match != "" {
 				results = append(results, []string{match, name})
 			}
 		}
 
-		for name, printer := range printers {
-			if name == format {
-				printer(results)
-			}
+		if index == "" {
+			print(results)
+			continue
+		}
+
+		buffered := buffer(results)
+		if buffered != nil {
+			print(buffered)
 		}
 	}
 

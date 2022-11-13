@@ -72,6 +72,9 @@ func handleJsonPrint(results [][]string) {
 	}
 }
 
+// RIPARTIRE QUI!<---
+// - stdout printer should be ordered in case
+//   there are indexed pipelines
 func handleStdoutPrint(results [][]string) {
 	for i, result := range results {
 		match := strings.TrimSpace(result[0])
