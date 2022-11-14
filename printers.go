@@ -37,19 +37,6 @@ func handleCsvPrint(results [][]string) {
 		csvWriter.Write(pipelineNames)
 	}
 
-	// empty := true
-	// record := make([]string, len(pipelineNames))
-	// for _, result := range results {
-	// 	match := result[0]
-	// 	name := result[1]
-
-	// 	for i, pipelineName := range pipelineNames {
-	// 		if name == pipelineName {
-	// 			empty = false
-	// 			record[i] = match
-	// 		}
-	// 	}
-	// }
 	empty := true
 	var record []string
 	for _, result := range results {
@@ -96,8 +83,6 @@ func handleJsonPrint(results [][]string) {
 	}
 }
 
-// RIPARTIRE QUI!<---
-// - Should refactor globals
 func handleStdoutPrint(results [][]string) {
 	for i, result := range results {
 		match := strings.TrimSpace(result[0])
@@ -111,5 +96,20 @@ func handleStdoutPrint(results [][]string) {
 	}
 	if len(results) > 0 {
 		fmt.Print("\n")
+	}
+}
+
+// RIPARTIRE QUI!<---
+// - Should refactor globals
+func handleCustomFormatPrint(results [][]string) {
+	// copy into msg
+	msg := format
+	for _, r := range results {
+		match, name := r[0], r[1]
+		// Using `%<name>` to void replacements with `$`
+		msg = strings.ReplaceAll(msg, "%"+name, match)
+	}
+	if msg != format {
+		fmt.Println(msg)
 	}
 }

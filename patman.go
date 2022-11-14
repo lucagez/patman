@@ -58,7 +58,11 @@ func Run() {
 	}
 
 	for _, raw := range os.Args[1:] {
-		if !regexp.MustCompile(`^\w+:`).MatchString(raw) {
+		var ops []string
+		for key := range transformers {
+			ops = append(ops, key)
+		}
+		if !regexp.MustCompile("(" + strings.Join(ops, "|") + "):").MatchString(raw) {
 			continue
 		}
 
@@ -119,6 +123,11 @@ func Run() {
 		if name == format {
 			print = p
 		}
+	}
+
+	// using custom formats in all other cases
+	if print == nil && format != "" {
+		print = handleCustomFormatPrint
 	}
 
 	for scanner.Scan() {
