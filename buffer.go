@@ -10,8 +10,7 @@ func buffer(results [][]string) [][]string {
 	var matchingIndex string
 
 	for _, result := range results {
-		match := result[0]
-		name := result[1]
+		match, name := result[0], result[1]
 
 		if name == index {
 			matchingIndex = match

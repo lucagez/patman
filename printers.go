@@ -58,8 +58,7 @@ var matchDigits = regexp.MustCompile(`^\d+(\.\d+)?$`)
 func handleJsonPrint(results [][]string) {
 	json := "{}"
 	for _, result := range results {
-		match := result[0]
-		name := result[1]
+		match, name := result[0], result[1]
 		if name == "" {
 			// TODO: This error should happen before parsing?
 			fmt.Println("cannot set json without named pipeline")
@@ -106,8 +105,6 @@ func handleStdoutPrint(results [][]string) {
 // [] reverse
 // [] upper
 // [] lower
-// [] replace named
-//    -> \s+(?P<digits>\d+)/%digits (add named captures capabilities into existing replace)
 func handleCustomFormatPrint(results [][]string) {
 	// copy into msg
 	msg := format
