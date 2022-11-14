@@ -7,6 +7,8 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
+	"golang.org/x/exp/slices"
 )
 
 // TODO: create better usage message
@@ -123,11 +125,33 @@ func Run() {
 		var results [][]string // match, name
 		for _, pipeline := range pipelines {
 			match, name := handle(scanner.Text(), pipeline)
-			if match != "" {
-				results = append(results, []string{match, name})
-			}
+			results = append(results, []string{match, name})
 		}
 
+		if len(pipelineNames) > 0 {
+			slices.SortFunc(results, func(a, b []string) bool {
+				// Unnamed pipelines should be pushed last
+				aIndex := -1
+				bIndex := -1
+				for i, name := range pipelineNames {
+					if name == a[1] {
+						aIndex = i
+					}
+					if name == b[1] {
+						bIndex = i
+					}
+				}
+				if aIndex < 0 {
+					return false
+				}
+				if bIndex < 0 {
+					return true
+				}
+				return aIndex < bIndex
+			})
+		}
+
+		// do not perform in memory buffering if no index is provided
 		if index == "" {
 			print(results)
 			continue
@@ -172,7 +196,7 @@ func handle(line string, cmds []string) (string, string) {
 		match = line
 	}
 
-	if len(cmds) > 1 && match != "" {
+	if len(cmds) > 1 {
 		return handle(match, cmds[1:])
 	}
 
