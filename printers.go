@@ -101,6 +101,13 @@ func handleStdoutPrint(results [][]string) {
 
 // RIPARTIRE QUI!<---
 // - Should refactor globals
+// - implement transformers:
+// [] split
+// [] reverse
+// [] upper
+// [] lower
+// [] replace named
+//    -> \s+(?P<digits>\d+)/%digits (add named captures capabilities into existing replace)
 func handleCustomFormatPrint(results [][]string) {
 	// copy into msg
 	msg := format

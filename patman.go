@@ -62,16 +62,20 @@ func Run() {
 		for key := range transformers {
 			ops = append(ops, key)
 		}
-		if !regexp.MustCompile("(" + strings.Join(ops, "|") + "):").MatchString(raw) {
+		if !regexp.MustCompile("(" + strings.Join(ops, "|") + ")\\(").MatchString(raw) {
 			continue
 		}
 
 		var cmds []string
-		for _, cmd := range strings.Split(raw, "|>") {
+		raw = strings.TrimSuffix(raw, ")")
+
+		// TODO: Could use regexp for allowing white spaces
+		// regexp.MustCompile("\\)(\\s|\\s+)?.").Split(raw, -1)
+		for _, cmd := range strings.Split(raw, ").") {
 			trimmed := strings.TrimSpace(cmd)
 			cmds = append(cmds, trimmed)
-			if strings.HasPrefix(trimmed, "name:") {
-				pipelineNames = append(pipelineNames, strings.TrimPrefix(trimmed, "name:"))
+			if strings.HasPrefix(trimmed, "name(") {
+				pipelineNames = append(pipelineNames, strings.TrimPrefix(trimmed, "name("))
 			}
 		}
 
@@ -79,12 +83,12 @@ func Run() {
 			knownOperator := false
 
 			for operator := range transformers {
-				if operator == strings.Split(cmd, ":")[0] {
+				if operator == strings.Split(cmd, "(")[0] {
 					knownOperator = true
 				}
 			}
 
-			if strings.HasPrefix(cmd, "name:") {
+			if strings.HasPrefix(cmd, "name(") {
 				knownOperator = true
 			}
 
@@ -187,7 +191,7 @@ func handle(line string, cmds []string) (string, string) {
 	arg := cmds[0]
 
 	for operator, transformer := range transformers {
-		prefix := fmt.Sprintf("%s:", operator)
+		prefix := fmt.Sprintf("%s(", operator)
 		if strings.HasPrefix(arg, prefix) {
 			match = transformer(line, strings.TrimPrefix(arg, prefix))
 		}
@@ -200,8 +204,8 @@ func handle(line string, cmds []string) (string, string) {
 		}
 	}
 
-	if strings.HasPrefix(arg, "name:") {
-		name = strings.Replace(arg, "name:", "", 1)
+	if strings.HasPrefix(arg, "name(") {
+		name = strings.Replace(arg, "name(", "", 1)
 		match = line
 	}
 
