@@ -98,13 +98,6 @@ func handleStdoutPrint(results [][]string) {
 	}
 }
 
-// RIPARTIRE QUI!<---
-// - Should refactor globals
-// - implement transformers:
-// [] split
-// [] reverse
-// [] upper
-// [] lower
 func handleCustomFormatPrint(results [][]string) {
 	// copy into msg
 	msg := format
