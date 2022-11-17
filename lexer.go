@@ -1,9 +1,10 @@
 package patman
 
-type Token struct {
+type token struct {
 	Type  tokenType
 	Value string
 	Line  int
+	Col   int
 	Pos   int
 	// PosEnd is Pos + len(value)
 }
@@ -21,52 +22,58 @@ const (
 	ERROR
 )
 
+// TODO: Can use chroma with custom (tiny) lexer for syntax highlight
+// 👉 https://github.com/alecthomas/chroma/blob/master/lexers/lexers.go#L48:6
+// 👉 https://github.com/charmbracelet/glamour/blob/master/ansi/codeblock.go
+
 // RIPARTIRE QUI!<---
-// - test lexer
 // - refactor to private
 // - small parser (just iterate and match <op><L_PARENS><STRING><R_PARENS> pairs)
 // - add friendly syntax errors
 // - match ops against transformers
 // - investigate bubbletea for interactive mode
 
-type Lexer struct {
+type lexer struct {
 	buf     []rune
 	ch      rune // current char
 	pos     int
 	nextpos int
 	line    int
+	col     int
 }
 
-func NewLexer(code string) Lexer {
-	return Lexer{
+func NewLexer(code string) lexer {
+	return lexer{
 		buf:     []rune(code),
 		ch:      rune(code[0]),
-		line:    0,
+		line:    1,
+		col:     0,
 		pos:     0,
 		nextpos: 1,
 	}
 }
 
-func (l *Lexer) NextToken() Token {
+func (l *lexer) NextToken() token {
 	for l.isWhitespace() {
-		if l.ch == '\n' {
+		if l.isNewLine() {
 			l.line += 1
+			l.col = 0
 		}
 
 		l.next()
 	}
 
 	if l.isEOF() {
-		return Token{
+		return token{
 			Type:  EOF,
 			Value: string("EOF"),
 			Pos:   l.pos,
 			Line:  l.line,
+			Col:   l.col,
 		}
 	}
 
-	// Is this an operator?
-	// TODO: Match against operators
+	// OPERATOR
 	if l.isPrevPipe() || l.pos == 0 || l.isPrevWhitespace() {
 		identIndex := l.pos
 		for l.isAlpha() {
@@ -74,43 +81,65 @@ func (l *Lexer) NextToken() Token {
 		}
 
 		if identIndex != l.pos {
-			value := string(l.buf[identIndex:l.pos])
-
-			// TODO: Match against transformers map and raise syntax error
-			// if ident does not exists
-			return Token{
+			return token{
 				Type:  IDENT,
-				Value: value,
+				Value: string(l.buf[identIndex:l.pos]),
 				Pos:   l.pos,
 				Line:  l.line,
+				Col:   l.col,
 			}
 		}
 	}
 
 	if l.isLparens() {
 		l.next()
-		return Token{
+		return token{
 			Type:  L_PARENS,
 			Value: "(",
 			Pos:   l.pos,
 			Line:  l.line,
+			Col:   l.col,
 		}
 	}
 
-	// MATCH ARGUMENTS
+	// ARGUMENTS
 	if l.isPrevLparens() {
 		argIndex := l.pos
-
-		// TODO: Should improve by matching last occurrence based also on `.` and EOF
 		counter := 1
+
 		for {
 			// End anyway at EOF to prevent infinite loop
 			if l.isEOF() {
-				return Token{
+				return token{
 					Type:  ERROR,
-					Value: string(l.ch),
+					Value: "EOF",
 					Pos:   l.pos,
 					Line:  l.line,
+					Col:   l.col,
+				}
+			}
+
+			// Should stop at unescaped new line delimiters OR at PIPE
+			// e.g. replace(a/2 |> 👉 should break
+			// e.g. replace(a/2
+			//      ..other chars  👉 should break
+			if l.isPipe() {
+				return token{
+					Type:  ERROR,
+					Value: "|>",
+					Pos:   l.pos,
+					Line:  l.line,
+					Col:   l.col,
+				}
+			}
+
+			if l.isNewLine() {
+				return token{
+					Type:  ERROR,
+					Value: "\n",
+					Pos:   l.pos,
+					Line:  l.line,
+					Col:   l.col,
 				}
 			}
 
@@ -137,30 +166,33 @@ func (l *Lexer) NextToken() Token {
 		}
 
 		if argIndex != l.pos {
-			return Token{
+			return token{
 				Type:  STRING,
 				Value: string(l.buf[argIndex:l.pos]),
 				Pos:   l.pos,
 				Line:  l.line,
+				Col:   l.col,
 			}
 		} else {
 			// There's no matching parens. Syntax error.
-			return Token{
+			return token{
 				Type:  ERROR,
 				Value: string(l.ch),
 				Pos:   l.pos,
 				Line:  l.line,
+				Col:   l.col,
 			}
 		}
 	}
 
 	if l.isRparens() {
 		l.next()
-		return Token{
+		return token{
 			Type:  R_PARENS,
 			Value: ")",
 			Pos:   l.pos,
 			Line:  l.line,
+			Col:   l.col,
 		}
 	}
 
@@ -168,36 +200,47 @@ func (l *Lexer) NextToken() Token {
 		// Pipe operator is 2 charachters
 		l.next()
 		l.next()
-		return Token{
+		return token{
 			Type:  PIPE,
 			Value: "|>",
 			Pos:   l.pos,
 			Line:  l.line,
+			Col:   l.col,
 		}
 	}
 
-	return Token{
+	return token{
 		Type:  ERROR,
 		Value: string(l.ch),
 		Pos:   l.pos,
 		Line:  l.line,
+		Col:   l.col,
 	}
 }
 
-func (l *Lexer) next() {
-	if l.nextpos < len(l.buf) {
-		l.pos = l.nextpos
-		l.nextpos += 1
-		l.ch = rune(l.buf[l.pos])
-	} else {
-		l.pos = len(l.buf)
+func (l *lexer) next() {
+	l.pos = l.nextpos
+	l.nextpos += 1
+	l.col += 1
+
+	if l.pos < 0 {
 		l.ch = -1 // EOF
+		return
 	}
+
+	if l.pos < len(l.buf) {
+		l.ch = rune(l.buf[l.pos])
+		return
+	}
+
+	l.pos = len(l.buf)
+	l.ch = -1 // EOF
 }
 
-func (l *Lexer) rewind() {
+func (l *lexer) rewind() {
 	l.pos -= 1
 	l.nextpos -= 1
+	l.col -= 1
 	if l.pos < 0 {
 		l.ch = -1
 	} else {
@@ -205,43 +248,47 @@ func (l *Lexer) rewind() {
 	}
 }
 
-func (l *Lexer) isEOF() bool {
+func (l *lexer) isEOF() bool {
 	return l.ch == -1
 }
 
-func (l *Lexer) isWhitespace() bool {
+func (l *lexer) isWhitespace() bool {
 	return l.ch == ' ' || l.ch == '\t' || l.ch == '\n' || l.ch == '\r'
 }
 
-func (l *Lexer) isLparens() bool {
+func (l *lexer) isLparens() bool {
 	return l.ch == '('
 }
 
-func (l *Lexer) isRparens() bool {
+func (l *lexer) isRparens() bool {
 	return l.ch == ')'
 }
 
-func (l *Lexer) isBackSlash() bool {
+func (l *lexer) isBackSlash() bool {
 	return l.ch == '\\'
 }
 
 // Allowed charachter set for defining identifiers
 // TODO: Add digits as allowed
-func (l *Lexer) isAlpha() bool {
+func (l *lexer) isAlpha() bool {
 	return 'a' <= l.ch && l.ch <= 'z' ||
 		'A' <= l.ch && l.ch <= 'Z' ||
 		l.ch == '_' ||
 		l.ch == '$'
 }
 
-func (l *Lexer) isPipe() bool {
-	if len(l.buf)-l.pos+2 > 0 {
+func (l *lexer) isPipe() bool {
+	if len(l.buf)-l.pos+2 > 0 && l.pos > 0 {
 		return string(l.buf[l.pos:l.pos+2]) == "|>"
 	}
 	return false
 }
 
-func (l *Lexer) isPrevPipe() bool {
+func (l *lexer) isNewLine() bool {
+	return l.ch == '\n'
+}
+
+func (l *lexer) isPrevPipe() bool {
 	l.rewind()
 	l.rewind()
 	is := l.isPipe()
@@ -250,21 +297,21 @@ func (l *Lexer) isPrevPipe() bool {
 	return is
 }
 
-func (l *Lexer) isPrevLparens() bool {
+func (l *lexer) isPrevLparens() bool {
 	l.rewind()
 	is := l.isLparens()
 	l.next()
 	return is
 }
 
-func (l *Lexer) isPrevWhitespace() bool {
+func (l *lexer) isPrevWhitespace() bool {
 	l.rewind()
 	is := l.isWhitespace()
 	l.next()
 	return is
 }
 
-func (l *Lexer) isPrevBackSlash() bool {
+func (l *lexer) isPrevBackSlash() bool {
 	l.rewind()
 	is := l.isBackSlash()
 	l.next()
