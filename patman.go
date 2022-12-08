@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -38,7 +39,7 @@ var input string
 var index string
 var format string
 var help bool
-var pipelines [][]string
+var pipelines [][]Command
 var pipelineNames []string
 
 func init() {
@@ -66,35 +67,15 @@ func Run() {
 			continue
 		}
 
-		var cmds []string
-		raw = strings.TrimSuffix(raw, ")")
-
-		// TODO: Could use regexp for allowing white spaces
-		// regexp.MustCompile("\\)(\\s|\\s+)?.").Split(raw, -1)
-		for _, cmd := range strings.Split(raw, ").") {
-			trimmed := strings.TrimSpace(cmd)
-			cmds = append(cmds, trimmed)
-			if strings.HasPrefix(trimmed, "name(") {
-				pipelineNames = append(pipelineNames, strings.TrimPrefix(trimmed, "name("))
-			}
+		parser := NewParser(raw)
+		cmds, err := parser.Parse()
+		if err != nil {
+			log.Fatal(err)
 		}
 
 		for _, cmd := range cmds {
-			knownOperator := false
-
-			for operator := range transformers {
-				if operator == strings.Split(cmd, "(")[0] {
-					knownOperator = true
-				}
-			}
-
-			if strings.HasPrefix(cmd, "name(") {
-				knownOperator = true
-			}
-
-			if !knownOperator {
-				fmt.Printf("`%s` is an unknown operator\n", cmd)
-				os.Exit(1)
+			if cmd.Name == "name" {
+				pipelineNames = append(pipelineNames, cmd.Arg)
 			}
 		}
 
@@ -138,7 +119,9 @@ func Run() {
 		var results [][]string // match, name
 		for _, pipeline := range pipelines {
 			match, name := handle(scanner.Text(), pipeline)
-			results = append(results, []string{match, name})
+			if match != "" {
+				results = append(results, []string{match, name})
+			}
 		}
 
 		if len(pipelineNames) > 0 {
@@ -185,28 +168,16 @@ func Run() {
 	}
 }
 
-func handle(line string, cmds []string) (string, string) {
+func handle(line string, cmds []Command) (string, string) {
 	match := ""
 	name := ""
-	arg := cmds[0]
+	cmd := cmds[0]
 
-	for operator, transformer := range transformers {
-		prefix := fmt.Sprintf("%s(", operator)
-		if strings.HasPrefix(arg, prefix) {
-			match = transformer(line, strings.TrimPrefix(arg, prefix))
-		}
-
-		// to allow cases where custom operators do
-		// not plan on using arguments.
-		// just for a more convenient syntax
-		if arg == operator {
-			match = transformer(line, operator)
-		}
-	}
-
-	if strings.HasPrefix(arg, "name(") {
-		name = strings.Replace(arg, "name(", "", 1)
+	if cmd.Name == "name" {
+		name = cmd.Arg
 		match = line
+	} else {
+		match = transformers[cmd.Name](line, cmd.Arg)
 	}
 
 	if len(cmds) > 1 {

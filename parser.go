@@ -57,7 +57,7 @@ func (p parser) Parse() ([]Command, error) {
 		}
 
 		if tok.Type == IDENT && i+3 < len(tokens) {
-			if _, ok := transformers[tok.Value]; !ok {
+			if _, ok := transformers[tok.Value]; !ok && tok.Value != "name" {
 				return []Command{}, errors.New(p.syntaxErr(fmt.Sprintf("unknown operator `%s`", tok.Value), tok))
 			}
 
