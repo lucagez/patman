@@ -85,21 +85,21 @@ func Register(name string, o OperatorEntry) {
 	operators[name] = o
 }
 
-func handleMatch(line, command string) string {
+func handleMatch(line, arg string) string {
 	// TODO: Possible to optimize by caching regexes. PAY ATTENTION TO REGEXP SHENANIGANS
-	regex, err := regexp.Compile(command)
+	regex, err := regexp.Compile(arg)
 	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", command)
+		fmt.Printf("`%s` is not a valid regexp pattern\n", arg)
 		os.Exit(1)
 	}
 
 	return regex.FindString(line)
 }
 
-func handleMatchAll(line, command string) string {
-	regex, err := regexp.Compile(command)
+func handleMatchAll(line, arg string) string {
+	regex, err := regexp.Compile(arg)
 	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", command)
+		fmt.Printf("`%s` is not a valid regexp pattern\n", arg)
 		os.Exit(1)
 	}
 
@@ -111,9 +111,9 @@ func handleMatchAll(line, command string) string {
 	return matches
 }
 
-func handleReplace(line, command string) string {
+func handleReplace(line, arg string) string {
 	// TODO: How to make this useful in case `/` needs to be matched?
-	cmds := strings.Split(command, "/")
+	cmds := Args(arg)
 	pattern, replacement := cmds[0], cmds[1]
 	regex, err := regexp.Compile(cmds[0])
 	if err != nil {
@@ -139,10 +139,10 @@ func handleReplace(line, command string) string {
 	return regex.ReplaceAllString(line, replacement)
 }
 
-func handleMatchLine(line, command string) string {
-	regex, err := regexp.Compile(command)
+func handleMatchLine(line, arg string) string {
+	regex, err := regexp.Compile(arg)
 	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", command)
+		fmt.Printf("`%s` is not a valid regexp pattern\n", arg)
 		os.Exit(1)
 	}
 	if regex.MatchString(line) {
@@ -151,10 +151,10 @@ func handleMatchLine(line, command string) string {
 	return ""
 }
 
-func handleNotMatchLine(line, command string) string {
-	regex, err := regexp.Compile(command)
+func handleNotMatchLine(line, arg string) string {
+	regex, err := regexp.Compile(arg)
 	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", command)
+		fmt.Printf("`%s` is not a valid regexp pattern\n", arg)
 		os.Exit(1)
 	}
 	if !regex.MatchString(line) {
@@ -163,12 +163,12 @@ func handleNotMatchLine(line, command string) string {
 	return ""
 }
 
-func handleSplit(line, command string) string {
-	cmds := strings.Split(command, "/")
+func handleSplit(line, arg string) string {
+	cmds := Args(arg)
 	pattern, arg := cmds[0], cmds[1]
 	regex, err := regexp.Compile(pattern)
 	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", command)
+		fmt.Printf("`%s` is not a valid regexp pattern\n", arg)
 		os.Exit(1)
 	}
 	index, err := strconv.ParseInt(arg, 10, 32)
@@ -179,9 +179,7 @@ func handleSplit(line, command string) string {
 
 	parts := regex.Split(line, -1)
 	if len(parts)-1 < int(index) {
-		fmt.Printf("Trying to access out of range index `%d` on:\n", index)
-		fmt.Println(parts)
-		os.Exit(1)
+		return ""
 	}
 
 	return parts[index]
@@ -189,22 +187,39 @@ func handleSplit(line, command string) string {
 
 var vm *goja.Runtime
 
-func handleJs(line, command string) string {
+func handleJs(line, arg string) string {
 	if vm == nil {
 		vm = goja.New()
 	}
 
 	// TODO: Should probably escape
 	vm.RunString(fmt.Sprintf("x = `%s`", line))
-	script := fmt.Sprintf("String(%s)", command)
+	script := fmt.Sprintf("String(%s)", arg)
 	v, err := vm.RunString(script)
 	if err != nil {
 		fmt.Println("error while executing js operator:")
 		fmt.Println(" ", err)
 		fmt.Println("")
-		fmt.Println(" ", "command:", command)
+		fmt.Println(" ", "arg:", arg)
 		fmt.Println(" ", "line:", line)
 		os.Exit(1)
 	}
 	return v.Export().(string)
+}
+
+// Args is a utility used by operators to
+// split argument by delimiter. Picking last occurrence.
+// e.g. /some/url/replacement -> '/some/url' 'replacement'
+func Args(arg string) []string {
+	// TODO: add configuration for delimiter
+	parts := strings.Split(arg, "/")
+	if len(parts) < 2 {
+		fmt.Printf("missing argument: %v\n", parts)
+		os.Exit(1)
+	}
+
+	return []string{
+		strings.Join(parts[0:len(parts)-1], "/"),
+		parts[len(parts)-1],
+	}
 }

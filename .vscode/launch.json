@@ -9,7 +9,8 @@
       "type": "go",
       "request": "launch",
       "mode": "auto",
-      "program": "${workspaceFolder}/cmd/example/main.go"
+      "args": ["-file", "test.txt", "ml(o) |> split(\\s/0)"],
+      "program": "${workspaceFolder}/cmd/patman/main.go"
     }
   ]
 }
