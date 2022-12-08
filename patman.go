@@ -12,29 +12,6 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-// TODO: create better usage message
-var usage = strings.Join([]string{
-	"Usage of pattern:",
-	"pattern [...commands]",
-	"",
-	"Available commands:",
-	"",
-	"match, m: matches the first instance that satisfies expression",
-	"  e.g. echo hello | match:e(.*) -> ello",
-	"",
-	"matchall, ma: matches all instances that satisfy expression",
-	"  e.g. echo hello | matchall:l -> ll",
-	"",
-	"replace, r: replaces expression with provided string",
-	"  e.g. echo hello | replace:e/a -> hallo",
-	"",
-	"matchline, ml: matches entire line that satisfies expression",
-	"  e.g. cat test.txt | matchline:hello -> ...all matching lines",
-	"",
-	"notmatchline, nml: returns entire lines that do not match expression",
-	"  e.g. cat test.txt | matchline:hello -> ...all matching lines",
-}, "\n")
-
 var input string
 var index string
 var format string
@@ -54,7 +31,9 @@ func Run() {
 	flag.Parse()
 
 	if help {
-		fmt.Println(usage)
+		flag.Usage()
+		usage()
+		// fmt.Println(usage)
 		os.Exit(0)
 	}
 
@@ -177,7 +156,7 @@ func handle(line string, cmds []Command) (string, string) {
 		name = cmd.Arg
 		match = line
 	} else {
-		match = operators[cmd.Name](line, cmd.Arg)
+		match = operators[cmd.Name].Operator(line, cmd.Arg)
 	}
 
 	if len(cmds) > 1 {
@@ -185,4 +164,26 @@ func handle(line string, cmds []Command) (string, string) {
 	}
 
 	return match, name
+}
+
+func usage() {
+	fmt.Println("Available commands:")
+	for name, entry := range operators {
+		if entry.Usage == "" {
+			continue
+		}
+
+		cmd := name
+		if entry.Alias != "" {
+			cmd = name + ", " + entry.Alias
+		}
+		fmt.Println("  ", cmd)
+
+		if entry.Usage != "" {
+			fmt.Println("       ", entry.Usage)
+		}
+		if entry.Example != "" {
+			fmt.Println("        e.g.", entry.Example)
+		}
+	}
 }

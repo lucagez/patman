@@ -10,26 +10,79 @@ import (
 	"github.com/dop251/goja"
 )
 
-type operator func(line string, arg string) string
-
-var operators = map[string]operator{
-	"match":        handleMatch,
-	"m":            handleMatch,
-	"matchall":     handleMatchAll,
-	"ma":           handleMatchAll,
-	"replace":      handleReplace,
-	"r":            handleReplace,
-	"matchline":    handleMatchLine,
-	"ml":           handleMatchLine,
-	"notmatchline": handleNotMatchLine,
-	"nml":          handleNotMatchLine,
-	"split":        handleSplit,
-	"s":            handleSplit,
-	"js":           handleJs,
+type OperatorEntry struct {
+	Operator operator
+	Usage    string
+	Alias    string
+	Example  string
 }
 
-func Register(name string, t operator) {
-	operators[name] = t
+type operator func(line string, arg string) string
+
+var operators = map[string]OperatorEntry{
+	"match": {
+		Operator: handleMatch,
+		Usage:    "matches first instance that satisfies expression",
+		Example:  "echo hello | match(e(.*)) # -> ello",
+		Alias:    "m",
+	},
+	"m": {
+		Operator: handleMatch,
+	},
+	"matchall": {
+		Operator: handleMatchAll,
+		Usage:    "matches all instances that satisfy expression",
+		Example:  "echo hello | matchall(l) # -> ll",
+		Alias:    "ma",
+	},
+	"ma": {
+		Operator: handleMatchAll,
+	},
+	"replace": {
+		Operator: handleReplace,
+		Usage:    "replaces expression with provided string",
+		Example:  "echo hello | replace(e/a) # -> hallo",
+		Alias:    "r",
+	},
+	"r": {
+		Operator: handleReplace,
+	},
+	"matchline": {
+		Operator: handleMatchLine,
+		Usage:    "matches entire line that satisfies expression",
+		Example:  "cat test.txt | matchline(hello) # -> ... matching lines",
+		Alias:    "ml",
+	},
+	"ml": {
+		Operator: handleMatchLine,
+	},
+	"notmatchline": {
+		Operator: handleNotMatchLine,
+		Usage:    "returns entire lines that do not match expression",
+		Example:  "cat test.txt | matchline(hello) # -> ... matching lines",
+		Alias:    "nml",
+	},
+	"nml": {
+		Operator: handleNotMatchLine,
+	},
+	"split": {
+		Operator: handleSplit,
+		Usage:    "split line by provided delimiter and take provided index",
+		Example:  "echo 'a b c' | split(\\s/1) # -> b",
+		Alias:    "s",
+	},
+	"s": {
+		Operator: handleSplit,
+	},
+	"js": {
+		Operator: handleJs,
+		Usage:    "execute js expression by passing `x` as argument. returned value is coerced to string",
+		Example:  "echo hello | js(x + 123) # -> hello123",
+	},
+}
+
+func Register(name string, o OperatorEntry) {
+	operators[name] = o
 }
 
 func handleMatch(line, command string) string {
