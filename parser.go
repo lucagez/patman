@@ -90,11 +90,12 @@ func (p parser) syntaxErr(msg string, tok token) string {
 			lines = append(lines, indent+line)
 
 			// BUG: this only counts spaces as if everything is displayed as
-			// on char of len ` `. Ofc this breaks and underline is not centered.
+			// on char of len ` `. Ofc this breaks and underline is not centered
+			// when using multi line scripts
 			underline := strings.Builder{}
 			underline.WriteString(indent)
-			if tok.Col-1-len(tok.Value) > 0 {
-				underline.WriteString(strings.Repeat(" ", tok.Col-1-len(tok.Value)))
+			if tok.Col-len(tok.Value) > 0 {
+				underline.WriteString(strings.Repeat(" ", tok.Col-len(tok.Value)))
 			}
 			underline.WriteString("^")
 			underline.WriteString(strings.Repeat("─", 5))
