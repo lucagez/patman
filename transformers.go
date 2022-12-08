@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/dop251/goja"
 )
 
 type transformer func(line string, arg string) string
@@ -23,7 +25,7 @@ var transformers = map[string]transformer{
 	"nml":          handleNotMatchLine,
 	"split":        handleSplit,
 	"s":            handleSplit,
-	// "js":           handleJs,
+	"js":           handleJs,
 }
 
 func Register(name string, t transformer) {
@@ -132,27 +134,24 @@ func handleSplit(line, command string) string {
 	return parts[index]
 }
 
-// var vm *goja.Runtime
+var vm *goja.Runtime
 
-// func handleJs(line, command string) string {
-// 	if vm == nil {
-// 		vm = goja.New()
-// 	}
+func handleJs(line, command string) string {
+	if vm == nil {
+		vm = goja.New()
+	}
 
-// 	if !strings.HasPrefix(command, ".") {
-// 		command = "." + command
-// 	}
-
-// 	// TODO: Should probably escape
-// 	script := fmt.Sprintf("String(`%s`%s)", line, command)
-// 	v, err := vm.RunString(script)
-// 	if err != nil {
-// 		fmt.Println("error while executing js pipeline:")
-// 		fmt.Println(" ", err)
-// 		fmt.Println("")
-// 		fmt.Println(" ", "pipeline 👉", command)
-// 		fmt.Println(" ", "on line 👉", line)
-// 		os.Exit(1)
-// 	}
-// 	return v.Export().(string)
-// }
+	// TODO: Should probably escape
+	vm.RunString(fmt.Sprintf("x = `%s`", line))
+	script := fmt.Sprintf("String(%s)", command)
+	v, err := vm.RunString(script)
+	if err != nil {
+		fmt.Println("error while executing js operator:")
+		fmt.Println(" ", err)
+		fmt.Println("")
+		fmt.Println(" ", "command:", command)
+		fmt.Println(" ", "line:", line)
+		os.Exit(1)
+	}
+	return v.Export().(string)
+}
