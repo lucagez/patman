@@ -60,7 +60,7 @@ func Run() {
 
 	for _, raw := range os.Args[1:] {
 		var ops []string
-		for key := range transformers {
+		for key := range operators {
 			ops = append(ops, key)
 		}
 		if !regexp.MustCompile("(" + strings.Join(ops, "|") + ")\\(").MatchString(raw) {
@@ -177,7 +177,7 @@ func handle(line string, cmds []Command) (string, string) {
 		name = cmd.Arg
 		match = line
 	} else {
-		match = transformers[cmd.Name](line, cmd.Arg)
+		match = operators[cmd.Name](line, cmd.Arg)
 	}
 
 	if len(cmds) > 1 {

@@ -13,7 +13,7 @@ type tokenType int
 
 const (
 	EOF    tokenType = iota
-	IDENT            // used for matching against user-defined transformers
+	IDENT            // used for matching against user-defined operators
 	STRING           // argument
 	SLASH            // used as argument delimiter
 	L_PARENS
@@ -25,13 +25,6 @@ const (
 // TODO: Can use chroma with custom (tiny) lexer for syntax highlight
 // 👉 https://github.com/alecthomas/chroma/blob/master/lexers/lexers.go#L48:6
 // 👉 https://github.com/charmbracelet/glamour/blob/master/ansi/codeblock.go
-
-// RIPARTIRE QUI!<---
-// - refactor to private
-// - small parser (just iterate and match <op><L_PARENS><STRING><R_PARENS> pairs)
-// - add friendly syntax errors
-// - match ops against transformers
-// - investigate bubbletea for interactive mode
 
 type lexer struct {
 	buf     []rune
@@ -278,7 +271,7 @@ func (l *lexer) isAlpha() bool {
 }
 
 func (l *lexer) isPipe() bool {
-	if len(l.buf)-l.pos+2 > 0 && l.pos > 0 {
+	if len(l.buf)-(l.pos+2) > 0 && l.pos > 0 {
 		return string(l.buf[l.pos:l.pos+2]) == "|>"
 	}
 	return false
