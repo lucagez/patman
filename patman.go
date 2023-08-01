@@ -15,6 +15,7 @@ import (
 var input string
 var index string
 var format string
+var mem int
 var help bool
 var pipelines [][]Command
 var pipelineNames []string
@@ -25,6 +26,7 @@ func init() {
 	flag.StringVar(&format, "format", "stdout", "format to be used for output, pipelines are printed in order")
 	flag.BoolVar(&help, "help", false, "shows help message")
 	flag.BoolVar(&help, "h", false, "shows help message")
+	flag.IntVar(&mem, "mem", 64, "Buffer size in MB")
 }
 
 func Run() {
@@ -94,8 +96,9 @@ func Run() {
 		print = handleCustomFormatPrint
 	}
 
-	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 1024*1024)
+	usedMem := mem * 1024 * 1024
+	buf := make([]byte, 0, usedMem)
+	scanner.Buffer(buf, usedMem)
 	for scanner.Scan() {
 		var results [][]string // match, name
 		for _, pipeline := range pipelines {
