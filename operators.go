@@ -79,6 +79,11 @@ var operators = map[string]OperatorEntry{
 		Usage:    "execute js expression by passing `x` as argument. returned value is coerced to string",
 		Example:  "echo hello | js(x + 123) # -> hello123",
 	},
+	"explode": {
+		Operator: handleExplode,
+		Usage:    "split line by provided delimiter and join all resulting lines with a \\n (new line) char. Useful for concatenating patman with itself",
+		Example:  "echo 'a b c' | explode(\\s) # -> a\nb\nc",
+	},
 }
 
 func Register(name string, o OperatorEntry) {
@@ -205,6 +210,23 @@ func handleJs(line, arg string) string {
 		os.Exit(1)
 	}
 	return v.Export().(string)
+}
+
+func handleExplode(line, arg string) string {
+	cmds := Args(arg)
+	pattern, arg := cmds[0], cmds[1]
+	regex, err := regexp.Compile(pattern)
+	if err != nil {
+		fmt.Printf("`%s` is not a valid regexp pattern\n", arg)
+		os.Exit(1)
+	}
+	limit, err := strconv.ParseInt(arg, 10, 32)
+	if err != nil {
+		limit = -1
+	}
+
+	parts := regex.Split(line, int(limit))
+	return strings.Join(parts, "\n")
 }
 
 // Args is a utility used by operators to
