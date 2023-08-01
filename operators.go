@@ -10,6 +10,24 @@ import (
 	"github.com/dop251/goja"
 )
 
+var regexCache = map[string]*regexp.Regexp{}
+
+func regex(pattern string) *regexp.Regexp {
+	if regex, ok := regexCache[pattern]; ok {
+		return regex
+	}
+
+	regex, err := regexp.Compile(pattern)
+	if err != nil {
+		fmt.Printf("`%s` is not a valid regexp pattern\n", pattern)
+		os.Exit(1)
+	}
+
+	regexCache[pattern] = regex
+
+	return regex
+}
+
 type OperatorEntry struct {
 	Operator operator
 	Usage    string
@@ -46,6 +64,15 @@ var operators = map[string]OperatorEntry{
 	},
 	"r": {
 		Operator: handleReplace,
+	},
+	"named_replace": {
+		Operator: handleNamedReplace,
+		Usage:    "replaces expression with provided string. Supports named capture groups",
+		Example:  "echo hello | named_replace(e(?P<first>l)(?P<second>l)o / %second%first) # -> ohell",
+		Alias:    "nr",
+	},
+	"nr": {
+		Operator: handleNamedReplace,
 	},
 	"matchline": {
 		Operator: handleMatchLine,
@@ -84,6 +111,15 @@ var operators = map[string]OperatorEntry{
 		Usage:    "split line by provided delimiter and join all resulting lines with a \\n (new line) char. Useful for concatenating patman with itself",
 		Example:  "echo 'a b c' | explode(\\s) # -> a\nb\nc",
 	},
+	"filter": {
+		Operator: handleFilter,
+		Usage:    "matches entire line that contains substring. Useful for quickly filtering large files (> 1GB). Way quicker than cat+grep",
+		Example:  "cat logs.txt | match_fast(hello) # -> ... matching lines",
+		Alias:    "mf",
+	},
+	"f": {
+		Operator: handleFilter,
+	},
 }
 
 func Register(name string, o OperatorEntry) {
@@ -91,45 +127,30 @@ func Register(name string, o OperatorEntry) {
 }
 
 func handleMatch(line, arg string) string {
-	// TODO: Possible to optimize by caching regexes. PAY ATTENTION TO REGEXP SHENANIGANS
-	regex, err := regexp.Compile(arg)
-	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", arg)
-		os.Exit(1)
-	}
-
-	return regex.FindString(line)
+	return regex(arg).FindString(line)
 }
 
 func handleMatchAll(line, arg string) string {
-	regex, err := regexp.Compile(arg)
-	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", arg)
-		os.Exit(1)
-	}
-
 	matches := ""
-	for _, match := range regex.FindAllString(line, -1) {
+	for _, match := range regex(arg).FindAllString(line, -1) {
 		matches += match
 	}
 
 	return matches
 }
 
-func handleReplace(line, arg string) string {
+// handleNamedReplace replaces named capture groups in the replacement string.
+// e.g. `echo "hello world" | named_replace(e(?P<first>l)(?P<second>l)o / %second%first) # -> ohell`
+func handleNamedReplace(line, arg string) string {
 	// TODO: How to make this useful in case `/` needs to be matched?
 	cmds := Args(arg)
 	pattern, replacement := cmds[0], cmds[1]
-	regex, err := regexp.Compile(cmds[0])
-	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", pattern)
-		os.Exit(1)
-	}
+	re := regex(pattern)
 
 	// attempt replace with named captures
 	if strings.Contains(replacement, `%`) {
-		submatches := regex.FindStringSubmatch(line)
-		names := regex.SubexpNames()
+		submatches := re.FindStringSubmatch(line)
+		names := re.SubexpNames()
 		if len(submatches) == 0 {
 			return ""
 		}
@@ -138,31 +159,35 @@ func handleReplace(line, arg string) string {
 				replacement = strings.ReplaceAll(replacement, "%"+names[i], match)
 			}
 		}
-		return regex.ReplaceAllString(line, replacement)
+		return re.ReplaceAllString(line, replacement)
 	}
 
-	return regex.ReplaceAllString(line, replacement)
+	return re.ReplaceAllString(line, replacement)
+}
+
+func handleReplace(line, arg string) string {
+	cmds := Args(arg)
+	substr, replacement := cmds[0], cmds[1]
+
+	return strings.ReplaceAll(line, substr, replacement)
 }
 
 func handleMatchLine(line, arg string) string {
-	regex, err := regexp.Compile(arg)
-	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", arg)
-		os.Exit(1)
+	if regex(arg).MatchString(line) {
+		return line
 	}
-	if regex.MatchString(line) {
+	return ""
+}
+
+func handleFilter(line, arg string) string {
+	if strings.Contains(line, arg) {
 		return line
 	}
 	return ""
 }
 
 func handleNotMatchLine(line, arg string) string {
-	regex, err := regexp.Compile(arg)
-	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", arg)
-		os.Exit(1)
-	}
-	if !regex.MatchString(line) {
+	if !regex(arg).MatchString(line) {
 		return line
 	}
 	return ""
@@ -171,18 +196,13 @@ func handleNotMatchLine(line, arg string) string {
 func handleSplit(line, arg string) string {
 	cmds := Args(arg)
 	pattern, arg := cmds[0], cmds[1]
-	regex, err := regexp.Compile(pattern)
-	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", arg)
-		os.Exit(1)
-	}
 	index, err := strconv.ParseInt(arg, 10, 32)
 	if err != nil {
 		fmt.Printf("`%s` is not a valid index\n", arg)
 		os.Exit(1)
 	}
 
-	parts := regex.Split(line, -1)
+	parts := regex(pattern).Split(line, -1)
 	if len(parts)-1 < int(index) {
 		return ""
 	}
@@ -215,17 +235,12 @@ func handleJs(line, arg string) string {
 func handleExplode(line, arg string) string {
 	cmds := Args(arg)
 	pattern, arg := cmds[0], cmds[1]
-	regex, err := regexp.Compile(pattern)
-	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", arg)
-		os.Exit(1)
-	}
 	limit, err := strconv.ParseInt(arg, 10, 32)
 	if err != nil {
 		limit = -1
 	}
 
-	parts := regex.Split(line, int(limit))
+	parts := regex(pattern).Split(line, int(limit))
 	return strings.Join(parts, "\n")
 }
 
