@@ -40,7 +40,7 @@ func handleCsvPrint(results [][]string) {
 	empty := true
 	var record []string
 	for _, result := range results {
-		record = append(record, result[0])
+		record = append(record, strings.TrimSpace(result[0]))
 		// print csv line if there's at least one non-empty value
 		if result[0] != "" {
 			empty = false
@@ -59,6 +59,7 @@ func handleJsonPrint(results [][]string) {
 	json := "{}"
 	for _, result := range results {
 		match, name := result[0], result[1]
+		match = strings.TrimSpace(result[0])
 		if name == "" {
 			// TODO: This error should happen before parsing?
 			fmt.Println("cannot set json without named pipeline")

@@ -19,6 +19,7 @@ var mem int
 var help bool
 var pipelines [][]Command
 var pipelineNames []string
+var delimiter string
 
 func init() {
 	flag.StringVar(&input, "file", "", "input file")
@@ -26,7 +27,8 @@ func init() {
 	flag.StringVar(&format, "format", "stdout", "format to be used for output, pipelines are printed in order")
 	flag.BoolVar(&help, "help", false, "shows help message")
 	flag.BoolVar(&help, "h", false, "shows help message")
-	flag.IntVar(&mem, "mem", 64, "Buffer size in MB")
+	flag.IntVar(&mem, "mem", 10, "Buffer size in MB")
+	flag.StringVar(&delimiter, "delimiter", "", "split input into a sequence of lines using a custom delimiter")
 }
 
 func Run() {
@@ -35,7 +37,6 @@ func Run() {
 	if help {
 		flag.Usage()
 		usage()
-		// fmt.Println(usage)
 		os.Exit(0)
 	}
 
@@ -99,6 +100,13 @@ func Run() {
 	usedMem := mem * 1024 * 1024
 	buf := make([]byte, 0, usedMem)
 	scanner.Buffer(buf, usedMem)
+
+	if delimiter != "" {
+		scanner.Split(ScanDelimiter(delimiter))
+	} else {
+		scanner.Split(bufio.ScanLines)
+	}
+
 	for scanner.Scan() {
 		var results [][]string // match, name
 		for _, pipeline := range pipelines {
@@ -109,7 +117,8 @@ func Run() {
 		}
 
 		if len(pipelineNames) > 0 {
-			slices.SortFunc(results, func(a, b []string) bool {
+			// TODO: Double check if sorting is broken after generics
+			slices.SortFunc(results, func(a, b []string) int {
 				// Unnamed pipelines should be pushed last
 				aIndex := -1
 				bIndex := -1
@@ -122,12 +131,12 @@ func Run() {
 					}
 				}
 				if aIndex < 0 {
-					return false
+					return 1
 				}
 				if bIndex < 0 {
-					return true
+					return -1
 				}
-				return aIndex < bIndex
+				return aIndex - bIndex
 			})
 		}
 
