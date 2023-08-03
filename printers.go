@@ -99,6 +99,39 @@ func handleStdoutPrint(results [][]string) {
 	}
 }
 
+var stdoutBuffer string
+var stdoutBufferCount int
+
+func flushBufferedStdout() {
+	fmt.Print(stdoutBuffer)
+	stdoutBuffer = ""
+	stdoutBufferCount = 0
+}
+
+func handleBufferedStdoutPrint(results [][]string) {
+	var r string
+	for i, result := range results {
+		match := strings.TrimSpace(result[0])
+		if match == "" {
+			continue
+		}
+		r += match
+		if i != len(results)-1 {
+			r += " "
+		}
+	}
+	if len(results) > 0 {
+		r += "\n"
+	}
+
+	stdoutBuffer += r
+	stdoutBufferCount++
+
+	if stdoutBufferCount >= stdoutBufferSize {
+		flushBufferedStdout()
+	}
+}
+
 var lastWrittenToken bool
 
 func handleJoinPrint(results [][]string) {

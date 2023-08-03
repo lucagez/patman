@@ -21,6 +21,7 @@ var pipelines [][]Command
 var pipelineNames []string
 var delimiter string
 var joinDelimiter string
+var stdoutBufferSize int
 
 func init() {
 	flag.StringVar(&input, "file", "", "input file")
@@ -31,6 +32,7 @@ func init() {
 	flag.IntVar(&mem, "mem", 10, "Buffer size in MB")
 	flag.StringVar(&delimiter, "delimiter", "", "split input into a sequence of lines using a custom delimiter")
 	flag.StringVar(&joinDelimiter, "join", "", "join output using a custom delimiter. Writes to stdout")
+	flag.IntVar(&stdoutBufferSize, "buffer", 0, "flush stdout in batches to increase performance")
 }
 
 func Run() {
@@ -101,6 +103,11 @@ func Run() {
 
 	if joinDelimiter != "" {
 		print = handleJoinPrint
+	}
+
+	if stdoutBufferSize > 0 {
+		print = handleBufferedStdoutPrint
+		defer flushBufferedStdout()
 	}
 
 	usedMem := mem * 1024 * 1024
