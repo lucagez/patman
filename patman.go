@@ -20,6 +20,7 @@ var help bool
 var pipelines [][]Command
 var pipelineNames []string
 var delimiter string
+var joinDelimiter string
 
 func init() {
 	flag.StringVar(&input, "file", "", "input file")
@@ -29,6 +30,7 @@ func init() {
 	flag.BoolVar(&help, "h", false, "shows help message")
 	flag.IntVar(&mem, "mem", 10, "Buffer size in MB")
 	flag.StringVar(&delimiter, "delimiter", "", "split input into a sequence of lines using a custom delimiter")
+	flag.StringVar(&joinDelimiter, "join", "", "join output using a custom delimiter. Writes to stdout")
 }
 
 func Run() {
@@ -95,6 +97,10 @@ func Run() {
 	// using custom formats in all other cases
 	if print == nil && format != "" {
 		print = handleCustomFormatPrint
+	}
+
+	if joinDelimiter != "" {
+		print = handleJoinPrint
 	}
 
 	usedMem := mem * 1024 * 1024
