@@ -102,21 +102,17 @@ func handleStdoutPrint(results [][]string) {
 var lastWrittenToken bool
 
 func handleJoinPrint(results [][]string) {
-	if lastWrittenToken {
-		fmt.Print(joinDelimiter)
-		lastWrittenToken = false
-	}
-
-	for i, result := range results {
+	for _, result := range results {
 		match := strings.TrimSpace(result[0])
 		if match == "" {
 			continue
 		}
+		if lastWrittenToken {
+			fmt.Print(joinDelimiter)
+			lastWrittenToken = false
+		}
 		fmt.Print(match)
 		lastWrittenToken = true
-		if i != len(results)-1 {
-			fmt.Print(" ")
-		}
 	}
 }
 
