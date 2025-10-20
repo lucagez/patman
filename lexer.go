@@ -36,9 +36,13 @@ type lexer struct {
 }
 
 func NewLexer(code string) lexer {
+	var ch rune = -1 // EOF for empty string
+	if len(code) > 0 {
+		ch = rune(code[0])
+	}
 	return lexer{
 		buf:     []rune(code),
-		ch:      rune(code[0]),
+		ch:      ch,
 		line:    1,
 		col:     0,
 		pos:     0,
@@ -47,13 +51,18 @@ func NewLexer(code string) lexer {
 }
 
 func (l *lexer) NextToken() token {
-	for l.isWhitespace() {
-		if l.isNewLine() {
-			l.line += 1
-			l.col = 0
-		}
+	if !l.isPrevLparens() {
+		for l.isWhitespace() {
+			if !l.isWhitespace() {
+				break
+			}
+			if l.isNewLine() {
+				l.line += 1
+				l.col = 0
+			}
 
-		l.next()
+			l.next()
+		}
 	}
 
 	if l.isEOF() {
