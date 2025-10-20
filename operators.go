@@ -114,7 +114,7 @@ var operators = map[string]OperatorEntry{
 	"filter": {
 		Operator: handleFilter,
 		Usage:    "matches entire line that contains substring. Useful for quickly filtering large files (> 1GB). Way quicker than cat+grep",
-		Example:  "cat logs.txt | match_fast(hello) # -> ... matching lines",
+		Example:  "cat logs.txt | filter(hello) # -> ... matching lines",
 		Alias:    "mf",
 	},
 	"f": {
@@ -176,9 +176,9 @@ func handleNamedReplace(line, arg string) string {
 
 func handleReplace(line, arg string) string {
 	cmds := Args(arg)
-	substr, replacement := cmds[0], cmds[1]
+	pattern, replacement := cmds[0], cmds[1]
 
-	return strings.ReplaceAll(line, substr, replacement)
+	return regex(pattern).ReplaceAllString(line, replacement)
 }
 
 func handleMatchLine(line, arg string) string {
