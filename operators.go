@@ -120,6 +120,15 @@ var operators = map[string]OperatorEntry{
 	"f": {
 		Operator: handleFilter,
 	},
+	"cut": {
+		Operator: handleCut,
+		Usage:    "split line by delimiter and select field(s) by index or range",
+		Example:  "echo 'a:b:c' | cut(:/0-1) # -> a:b",
+		Alias:    "c",
+	},
+	"c": {
+		Operator: handleCut,
+	},
 }
 
 func Register(name string, o OperatorEntry) {
@@ -242,6 +251,52 @@ func handleExplode(line, arg string) string {
 
 	parts := regex(pattern).Split(line, int(limit))
 	return strings.Join(parts, "\n")
+}
+
+func handleCut(line, arg string) string {
+	cmds := Args(arg)
+	delimiter := cmds[0]
+	parts := regex(delimiter).Split(line, -1)
+	rangeSpec := strings.Split(cmds[1], "-")
+	if len(rangeSpec) == 0 {
+		fmt.Printf("`%s` invalid range\n", rangeSpec)
+		os.Exit(1)
+	}
+
+	var start, end int64
+	var err error
+
+	start, err = strconv.ParseInt(rangeSpec[0], 10, 32)
+	if err != nil {
+		fmt.Printf("`%s` is not a valid start index\n", rangeSpec[0])
+		os.Exit(1)
+	}
+
+	if len(rangeSpec) == 2 {
+		end, err = strconv.ParseInt(rangeSpec[1], 10, 32)
+		if err != nil {
+			fmt.Printf("`%s` is not a valid end index\n", rangeSpec[1])
+			os.Exit(1)
+		}
+	}
+
+	if start < 0 || int(start) >= len(parts) {
+		return ""
+	}
+	if int(end) >= len(parts) {
+		end = int64(len(parts) - 1)
+	}
+	if start > end {
+		return ""
+	}
+
+	selected := parts[start : end+1]
+	matches := regex(delimiter).FindAllString(line, -1)
+	if len(matches) > 0 {
+		return strings.Join(selected, matches[0])
+	}
+
+	return strings.Join(selected, "")
 }
 
 // Args is a utility used by operators to
