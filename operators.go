@@ -129,6 +129,24 @@ var operators = map[string]OperatorEntry{
 	"c": {
 		Operator: handleCut,
 	},
+	"uppercase": {
+		Operator: handleUppercase,
+		Usage:    "convert line to uppercase",
+		Example:  "echo 'hello' | uppercase() # -> HELLO",
+		Alias:    "upper",
+	},
+	"upper": {
+		Operator: handleUppercase,
+	},
+	"lowercase": {
+		Operator: handleLowercase,
+		Usage:    "convert line to lowercase",
+		Example:  "echo 'HELLO' | lowercase() # -> hello",
+		Alias:    "lower",
+	},
+	"lower": {
+		Operator: handleLowercase,
+	},
 }
 
 func Register(name string, o OperatorEntry) {
@@ -251,6 +269,14 @@ func handleExplode(line, arg string) string {
 
 	parts := regex(pattern).Split(line, int(limit))
 	return strings.Join(parts, "\n")
+}
+
+func handleUppercase(line, arg string) string {
+	return strings.ToUpper(line)
+}
+
+func handleLowercase(line, arg string) string {
+	return strings.ToLower(line)
 }
 
 func handleCut(line, arg string) string {
