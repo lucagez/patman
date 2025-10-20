@@ -7,21 +7,28 @@ Its reason for existence is in all those cases where `grep` and `sed` are not en
 Have you ever tried to parse GBs of logs while debugging a production incident? 
 
 ## Installation
-Currently the best way to install Patman is to use it as a library. You will need to have Go installed on your system.
 
+### Install Script (Recommended)
+Quick installation on Linux, macOS, or FreeBSD:
 ```bash
-go get github.com/lucagez/patman
+curl -sSfL https://raw.githubusercontent.com/lucagez/patman/main/install.sh | sh
 ```
 
-Then create a `main.go` file with the following contents:
-```go
-package main
+### Download Binary
+Download pre-built binaries from the [releases page](https://github.com/lucagez/patman/releases/latest).
 
-import "github.com/lucagez/patman"
+### Go Install
+If you have Go installed:
+```bash
+go install github.com/lucagez/patman/cmd/patman@latest
+```
 
-func main() {
-	patman.Run()
-}
+### Build from Source
+```bash
+git clone https://github.com/lucagez/patman.git
+cd patman
+go build -o patman ./cmd/patman
+sudo mv patman /usr/local/bin/
 ```
 
 ## Extending Patman natively
@@ -118,76 +125,106 @@ echo something | patman 'name(output_name)'
 Matches the first instance of a regex expression.
 **Usage:** 
 ```bash
-echo something | patman 'match(expression)'
+echo hello | patman 'match(e(.*))'  # ello
 ```
 
 #### matchall/ma
 Matches all instances of a regex expression.
 **Usage:** 
 ```bash
-echo something | patman 'matchall(expression)'
+echo hello | patman 'matchall(l)'  # ll
 ```
 
 #### replace/r
 Replaces text matching a regex expression with a specified string.
 **Usage:** 
 ```bash
-echo something | patman 'replace(expression/replacement)'
+echo hello | patman 'replace(e/a)'  # hallo
 ```
 
 #### named_replace/nr
 Performs regex replacement using named capture groups.
 **Usage:** 
 ```bash
-echo something | patman 'named_replace(expression/replacement)'
+echo hello | patman 'named_replace(e(?P<first>l)(?P<second>l)o/%second%first)'  # ohell
 ```
 
 #### matchline/ml
 Matches entire lines that satisfy a regex expression.
 **Usage:** 
 ```bash
-echo something | patman 'matchline(expression)'
+cat test.txt | patman 'matchline(hello)'  # ... matching lines
 ```
 
 #### notmatchline/nml
 Returns lines that do not match a regex expression.
 **Usage:** 
 ```bash
-echo something | patman 'notmatchline(expression)'
+cat test.txt | patman 'notmatchline(hello)'  # ... non-matching lines
 ```
 
 #### split/s
 Splits a line by a specified delimiter and selects a part based on index.
 **Usage:** 
 ```bash
-echo something | patman 'split(delimiter/index)'
+echo 'a b c' | patman 'split(\s/1)'  # b
 ```
 
 #### filter/f
-Filters lines containing a specified substring.
+Filters lines containing a specified substring. Way faster than grep for large files.
 **Usage:** 
 ```bash
-echo something | patman 'filter(substring)'
+cat logs.txt | patman 'filter(hello)'  # ... matching lines
+```
+
+#### cut/c
+Splits a line by delimiter and selects field(s) by index or range.
+**Usage:** 
+```bash
+echo 'a:b:c' | patman 'cut(:/0-1)'  # a:b
+echo 'a:b:c' | patman 'cut(:/1)'    # b
+```
+
+#### uppercase/upper
+Converts line to uppercase.
+**Usage:** 
+```bash
+echo 'hello' | patman 'uppercase()'  # HELLO
+```
+
+#### lowercase/lower
+Converts line to lowercase.
+**Usage:** 
+```bash
+echo 'HELLO' | patman 'lowercase()'  # hello
+```
+
+#### uniq/u
+Removes duplicate lines (keeps first occurrence).
+**Usage:** 
+```bash
+cat logs.txt | patman 'ml(error) |> uniq(_)'
 ```
 
 #### js
 Executes a JavaScript expression, passing `x` as the argument.
 **Usage:** 
 ```bash
-echo something | patman 'js(expression)'
-
-# e.g. uppercase
-echo something | patman 'js(x.toUpperCase())' # SOMETHING
+echo something | patman 'js(x.toUpperCase())'  # SOMETHING
+echo hello | patman 'js(x + 123)'              # hello123
 ```
 
 #### explode
 Splits a line by a specified delimiter and joins resulting parts with a newline character.
 **Usage:** 
 ```bash
-echo something | patman 'explode(delimiter)'
+echo 'a b c' | patman 'explode(\s)'
+# a
+# b
+# c
 
-# e.g. split by any char
-echo something | patman 'explode(\.*/)'
+# Split by any character
+echo something | patman 'explode(\.*/)' 
 # s
 # o
 # m

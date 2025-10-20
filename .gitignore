@@ -7,3 +7,9 @@ devenv.lock
 .devenv
 .devenv.flake.nix
 patman
+
+# GoReleaser artifacts
+dist/
+*.tar.gz
+*.zip
+checksums.txt

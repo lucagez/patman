@@ -1,0 +1,104 @@
+# GoReleaser configuration for patman
+# Documentation: https://goreleaser.com
+
+version: 2
+
+before:
+  hooks:
+    # Ensure go.mod is tidy
+    - go mod tidy
+    # Run tests before building
+    - go test ./...
+
+builds:
+  - id: patman
+    main: ./cmd/patman
+    binary: patman
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+      - freebsd
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "6"
+      - "7"
+    ignore:
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: patman
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "typo"
+
+# Universal binary for macOS (combines amd64 and arm64)
+universal_binaries:
+  - id: patman
+    replace: true
+    name_template: "patman"
+
+# Release settings
+release:
+  github:
+    owner: lucagez
+    name: patman
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Installation
+
+    ### Install script (recommended)
+    ```bash
+    curl -sSfL https://raw.githubusercontent.com/lucagez/patman/main/install.sh | sh
+    ```
+
+    ### Direct binary download
+    Download the appropriate binary for your platform from the assets below.
+
+    ### Go install
+    ```bash
+    go install github.com/lucagez/patman/cmd/patman@latest
+    ```
+  footer: |
+    **Full Changelog**: https://github.com/lucagez/patman/compare/{{ .PreviousTag }}...{{ .Tag }}
