@@ -1,2 +1,9 @@
 pattern
 build/
+starship.toml
+.envrc
+devenv.nix
+devenv.lock
+.devenv
+.devenv.flake.nix
+patman

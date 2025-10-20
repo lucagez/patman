@@ -1,6 +1,6 @@
 #!/bin/bash
 
-go run main.go \
+go run cmd/patman/main.go \
   -file ./logs.txt \
   -format csv \
   'r:"|\s/ |> m:trace_id:\d+ |> r:trace_id:/ |> name:trace_id' \
