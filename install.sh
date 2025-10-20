@@ -43,18 +43,22 @@ main() {
     echo "Installing patman ${VERSION} for ${OS}_${ARCH}..."
 
     # Construct download URL
-    BINARY_NAME="patman_${OS}_${ARCH}"
-    if [ "$OS" = "Linux" ] || [ "$OS" = "FreeBSD" ]; then
-        ARCHIVE_NAME="${BINARY_NAME}.tar.gz"
-    elif [ "$OS" = "Darwin" ]; then
-        ARCHIVE_NAME="${BINARY_NAME}.tar.gz"
+    # macOS uses universal binary (all), others use specific architecture
+    if [ "$OS" = "Darwin" ]; then
+        BINARY_NAME="patman_${OS}_all"
     else
+        BINARY_NAME="patman_${OS}_${ARCH}"
+    fi
+
+    if [ "$OS" = "Windows" ]; then
         ARCHIVE_NAME="${BINARY_NAME}.zip"
+    else
+        ARCHIVE_NAME="${BINARY_NAME}.tar.gz"
     fi
 
     DOWNLOAD_URL="https://github.com/lucagez/patman/releases/download/${VERSION}/${ARCHIVE_NAME}"
 
-    # temporary install dir
+    # Create temporary directory
     TMP_DIR=$(mktemp -d)
     trap "rm -rf $TMP_DIR" EXIT
 
@@ -68,6 +72,7 @@ main() {
         exit 1
     fi
 
+    # Extract archive
     cd "$TMP_DIR"
     if [ "${ARCHIVE_NAME##*.}" = "zip" ]; then
         unzip -q "$ARCHIVE_NAME"
