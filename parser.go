@@ -40,7 +40,7 @@ func (p parser) Parse() ([]Command, error) {
 			return []Command{}, errors.New(p.syntaxErr("missing pipe operator `|>`", tok))
 		}
 		if tok.Type == IDENT && tokens[i+1].Type != L_PARENS {
-			return []Command{}, errors.New(p.syntaxErr("missing opening parens `(`", tok))
+			return []Command{}, errors.New(p.syntaxErr("missing opening parens `(`", tokens[i+1]))
 		}
 
 		if tok.Type == ERROR && tok.Value == "EOF" {
@@ -94,8 +94,12 @@ func (p parser) syntaxErr(msg string, tok token) string {
 			// when using multi line scripts
 			underline := strings.Builder{}
 			underline.WriteString(indent)
-			if tok.Col-len(tok.Value) > 0 {
-				underline.WriteString(strings.Repeat(" ", tok.Col-len(tok.Value)))
+			errorCol := tok.Col
+			if tok.Type != ERROR && tok.Type != EOF {
+				errorCol = tok.Col - len(tok.Value)
+			}
+			if errorCol > 0 {
+				underline.WriteString(strings.Repeat(" ", errorCol))
 			}
 			underline.WriteString("^")
 			underline.WriteString(strings.Repeat("─", 5))
