@@ -1,6 +1,6 @@
 module github.com/lucagez/patman
 
-go 1.19
+go 1.25
 
 require github.com/tidwall/sjson v1.2.5
 
