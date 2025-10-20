@@ -147,6 +147,15 @@ var operators = map[string]OperatorEntry{
 	"lower": {
 		Operator: handleLowercase,
 	},
+	"uniq": {
+		Operator: handleUniq,
+		Usage:    "remove duplicate lines (keeps first occurrence)",
+		Example:  "cat logs.txt | patman 'ml(error) |> uniq(_)'",
+		Alias:    "u",
+	},
+	"u": {
+		Operator: handleUniq,
+	},
 }
 
 func Register(name string, o OperatorEntry) {
@@ -277,6 +286,18 @@ func handleUppercase(line, arg string) string {
 
 func handleLowercase(line, arg string) string {
 	return strings.ToLower(line)
+}
+
+var uniq = map[string]int{}
+
+func handleUniq(line, arg string) string {
+	if count, seen := uniq[line]; seen {
+		uniq[line] = count + 1
+		return ""
+	}
+
+	uniq[line] = 1
+	return line
 }
 
 func handleCut(line, arg string) string {
