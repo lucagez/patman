@@ -296,15 +296,12 @@ func handleLowercase(line, arg string) (string, error) {
 	return strings.ToLower(line), nil
 }
 
-var uniq = map[string]int{}
+var uniq sync.Map
 
 func handleUniq(line, arg string) (string, error) {
-	if count, seen := uniq[line]; seen {
-		uniq[line] = count + 1
+	if _, loaded := uniq.LoadOrStore(line, true); loaded {
 		return "", nil
 	}
-
-	uniq[line] = 1
 	return line, nil
 }
 
