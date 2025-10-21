@@ -4,7 +4,7 @@
 Patman is a tiny command-line tool designed for processing and manipulating raw text data. It excels in tasks like log filtering and aggregation, offering a range of operators for various annoying text operations.
 Its reason for existence is in all those cases where `grep` and `sed` are not enough, but a dedicated script language is overkill or too slow.
 
-Have you ever tried to parse GBs of logs while debugging a production incident? 
+Have you ever tried to parse GBs of logs while debugging a production incident?
 
 ## Installation
 
@@ -12,6 +12,11 @@ Have you ever tried to parse GBs of logs while debugging a production incident?
 Quick installation on Linux, macOS, or FreeBSD:
 ```bash
 curl -sSfL https://raw.githubusercontent.com/lucagez/patman/main/install.sh | sh
+```
+
+Quick installation on Windows (powershell):
+```bash
+irm https://raw.githubusercontent.com/lucagez/patman/main/install.ps1 | iex
 ```
 
 ### Download Binary
@@ -116,70 +121,70 @@ Patman includes a variety of operators for text manipulation:
 
 #### name/n
 Assigns a name to the output of an operator, useful for log aggregation and naming columns in csv or json formats.
-**Usage:** 
+**Usage:**
 ```bash
 echo something | patman 'name(output_name)'
 ```
 
 #### match/m
 Matches the first instance of a regex expression.
-**Usage:** 
+**Usage:**
 ```bash
 echo hello | patman 'match(e(.*))'  # ello
 ```
 
 #### matchall/ma
 Matches all instances of a regex expression.
-**Usage:** 
+**Usage:**
 ```bash
 echo hello | patman 'matchall(l)'  # ll
 ```
 
 #### replace/r
 Replaces text matching a regex expression with a specified string.
-**Usage:** 
+**Usage:**
 ```bash
 echo hello | patman 'replace(e/a)'  # hallo
 ```
 
 #### named_replace/nr
 Performs regex replacement using named capture groups.
-**Usage:** 
+**Usage:**
 ```bash
 echo hello | patman 'named_replace(e(?P<first>l)(?P<second>l)o/%second%first)'  # ohell
 ```
 
 #### matchline/ml
 Matches entire lines that satisfy a regex expression.
-**Usage:** 
+**Usage:**
 ```bash
 cat test.txt | patman 'matchline(hello)'  # ... matching lines
 ```
 
 #### notmatchline/nml
 Returns lines that do not match a regex expression.
-**Usage:** 
+**Usage:**
 ```bash
 cat test.txt | patman 'notmatchline(hello)'  # ... non-matching lines
 ```
 
 #### split/s
 Splits a line by a specified delimiter and selects a part based on index.
-**Usage:** 
+**Usage:**
 ```bash
 echo 'a b c' | patman 'split(\s/1)'  # b
 ```
 
 #### filter/f
 Filters lines containing a specified substring. Way faster than grep for large files.
-**Usage:** 
+**Usage:**
 ```bash
 cat logs.txt | patman 'filter(hello)'  # ... matching lines
 ```
 
 #### cut/c
 Splits a line by delimiter and selects field(s) by index or range.
-**Usage:** 
+**Usage:**
 ```bash
 echo 'a:b:c' | patman 'cut(:/0-1)'  # a:b
 echo 'a:b:c' | patman 'cut(:/1)'    # b
@@ -187,21 +192,21 @@ echo 'a:b:c' | patman 'cut(:/1)'    # b
 
 #### uppercase/upper
 Converts line to uppercase.
-**Usage:** 
+**Usage:**
 ```bash
 echo 'hello' | patman 'uppercase()'  # HELLO
 ```
 
 #### lowercase/lower
 Converts line to lowercase.
-**Usage:** 
+**Usage:**
 ```bash
 echo 'HELLO' | patman 'lowercase()'  # hello
 ```
 
 #### uniq/u
 Removes duplicate lines (keeps first occurrence).
-**Usage:** 
+**Usage:**
 ```bash
 cat logs.txt | patman 'ml(error) |> uniq(_)'
 ```
@@ -243,7 +248,7 @@ echo 100 | patman 'eq(100)' # 100
 
 #### js
 Executes a JavaScript expression, passing `x` as the argument.
-**Usage:** 
+**Usage:**
 ```bash
 echo something | patman 'js(x.toUpperCase())'  # SOMETHING
 echo hello | patman 'js(x + 123)'              # hello123
@@ -251,7 +256,7 @@ echo hello | patman 'js(x + 123)'              # hello123
 
 #### explode
 Splits a line by a specified delimiter and joins resulting parts with a newline character.
-**Usage:** 
+**Usage:**
 ```bash
 echo 'a b c' | patman 'explode(\s)'
 # a
@@ -259,7 +264,7 @@ echo 'a b c' | patman 'explode(\s)'
 # c
 
 # Split by any character
-echo something | patman 'explode(\.*/)' 
+echo something | patman 'explode(\.*/)'
 # s
 # o
 # m

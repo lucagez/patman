@@ -50,12 +50,6 @@ main() {
         BINARY_NAME="patman_${OS}_${ARCH}"
     fi
 
-    if [ "$OS" = "Windows" ]; then
-        ARCHIVE_NAME="${BINARY_NAME}.zip"
-    else
-        ARCHIVE_NAME="${BINARY_NAME}.tar.gz"
-    fi
-
     DOWNLOAD_URL="https://github.com/lucagez/patman/releases/download/${VERSION}/${ARCHIVE_NAME}"
 
     TMP_DIR=$(mktemp -d)
