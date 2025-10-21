@@ -409,6 +409,7 @@ func handleEq(line, arg string) (string, error) {
 	return "", nil
 }
 
+// TODO: should support empty char splitting
 func handleCut(line, arg string) (string, error) {
 	cmds := Args(arg)
 	delimiter := cmds[0]
