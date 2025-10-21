@@ -143,27 +143,25 @@ func Run() {
 		scanner.Split(bufio.ScanLines)
 	}
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go func() {
-		<-sigChan
-		cancel() // trigger graceful shutdown
-	}()
-
 	if workers == 1 {
 		syncScan(scanner, print)
 	} else {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		go func() {
+			<-sigChan
+			cancel() // trigger graceful shutdown
+		}()
+
 		parallelScan(ctx, scanner, print)
 	}
 
 	// TODO: should be considered while scanning
 	if err := scanner.Err(); err != nil {
 		log.Printf("scanner error: %v", err)
-		cancel()
 	}
 
 	if stdoutBufferSize > 0 {
@@ -175,15 +173,18 @@ func Run() {
 	}
 }
 
-func collector(ctx context.Context, results <-chan Result, print printer) {
+func collector(ctx context.Context, resultsCh <-chan Result, print printer) {
 	ordering := make(map[int64][][]string)
 
 	var seq int64
-	for result := range results {
+	for {
 		select {
 		case <-ctx.Done():
 			return
-		default:
+		case result, ok := <-resultsCh:
+			if !ok {
+				return
+			}
 			if result.Err != nil && exitOnError {
 				log.Fatalf("error processing line %d: %v", result.Seq, result.Err)
 			}
@@ -215,11 +216,15 @@ func collector(ctx context.Context, results <-chan Result, print printer) {
 }
 
 func worker(ctx context.Context, jobsCh <-chan Job, resultsCh chan<- Result) {
-	for job := range jobsCh {
+	for {
 		select {
 		case <-ctx.Done():
 			return
-		default:
+		case job, ok := <-jobsCh:
+			if !ok {
+				return
+			}
+
 			var results [][]string
 			for _, pipeline := range pipelines {
 				match, name, err := handle(job.Line, pipeline)
@@ -342,29 +347,46 @@ func parallelScan(ctx context.Context, scanner *bufio.Scanner, print printer) {
 
 	jobsCh := make(chan Job, queueSize)
 	resultsCh := make(chan Result, numWorkers*2)
+	linesCh := make(chan string, queueSize)
 
-	var wg sync.WaitGroup
+	go func() {
+		defer close(linesCh)
+		for scanner.Scan() {
+			linesCh <- scanner.Text()
+		}
+	}()
+
+	var workersWg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
-		wg.Go(func() {
+		workersWg.Go(func() {
 			worker(ctx, jobsCh, resultsCh)
 		})
 	}
 
-	go func() {
+	var collectorWg sync.WaitGroup
+	collectorWg.Go(func() {
 		collector(ctx, resultsCh, print)
-	}()
+	})
+
+	cleanup := func() {
+		close(jobsCh)
+		workersWg.Wait()
+		close(resultsCh)
+		collectorWg.Wait()
+	}
+	defer cleanup()
 
 	var seq int64
-	for scanner.Scan() {
+	for {
 		select {
 		case <-ctx.Done():
 			return
-		case jobsCh <- Job{Seq: seq, Line: scanner.Text()}:
+		case line, ok := <-linesCh:
+			if !ok {
+				return
+			}
+			jobsCh <- Job{Seq: seq, Line: line}
 			seq++
 		}
 	}
-
-	close(jobsCh)
-	wg.Wait()
-	close(resultsCh)
 }
