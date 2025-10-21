@@ -164,6 +164,31 @@ var operators = map[string]OperatorEntry{
 	"u": {
 		Operator: handleUniq,
 	},
+	"gt": {
+		Operator: handleGt,
+		Usage:    "filters lines that are numerically greater than the provided number",
+		Example:  "echo 101 | gt(100) # -> 101",
+	},
+	"gte": {
+		Operator: handleGte,
+		Usage:    "filters lines that are numerically greater than or equal to the provided number",
+		Example:  "echo 100 | gte(100) # -> 100",
+	},
+	"lt": {
+		Operator: handleLt,
+		Usage:    "filters lines that are numerically less than the provided number",
+		Example:  "echo 99 | lt(100) # -> 99",
+	},
+	"lte": {
+		Operator: handleLte,
+		Usage:    "filters lines that are numerically less than or equal to the provided number",
+		Example:  "echo 100 | lte(100) # -> 100",
+	},
+	"eq": {
+		Operator: handleEq,
+		Usage:    "filters lines that are numerically equal to the provided number",
+		Example:  "echo 100 | eq(100) # -> 100",
+	},
 }
 
 func Register(name string, o OperatorEntry) {
@@ -262,6 +287,10 @@ func handleSplit(line, arg string) (string, error) {
 var vm *goja.Runtime
 
 func handleJs(line, arg string) (string, error) {
+	if workers != 1 {
+		return "", fmt.Errorf("js engine does not currently supports parallelization. run again without specifying -workers flag")
+	}
+
 	if vm == nil {
 		vm = goja.New()
 	}
@@ -303,6 +332,81 @@ func handleUniq(line, arg string) (string, error) {
 		return "", nil
 	}
 	return line, nil
+}
+
+func handleGt(line, arg string) (string, error) {
+	val, err := strconv.ParseFloat(strings.TrimSpace(line), 64)
+	if err != nil {
+		return "", nil // Filter out non-numeric lines
+	}
+	limit, err := strconv.ParseFloat(arg, 64)
+	if err != nil {
+		return "", fmt.Errorf("`%s` is not a valid number for gt operator", arg)
+	}
+	if val > limit {
+		return line, nil
+	}
+	return "", nil
+}
+
+func handleGte(line, arg string) (string, error) {
+	val, err := strconv.ParseFloat(strings.TrimSpace(line), 64)
+	if err != nil {
+		return "", nil // Filter out non-numeric lines
+	}
+	limit, err := strconv.ParseFloat(arg, 64)
+	if err != nil {
+		return "", fmt.Errorf("`%s` is not a valid number for gte operator", arg)
+	}
+	if val >= limit {
+		return line, nil
+	}
+	return "", nil
+}
+
+func handleLt(line, arg string) (string, error) {
+	val, err := strconv.ParseFloat(strings.TrimSpace(line), 64)
+	if err != nil {
+		return "", nil // Filter out non-numeric lines
+	}
+	limit, err := strconv.ParseFloat(arg, 64)
+	if err != nil {
+		return "", fmt.Errorf("`%s` is not a valid number for lt operator", arg)
+	}
+	if val < limit {
+		return line, nil
+	}
+	return "", nil
+}
+
+func handleLte(line, arg string) (string, error) {
+	val, err := strconv.ParseFloat(strings.TrimSpace(line), 64)
+	if err != nil {
+		return "", nil // Filter out non-numeric lines
+	}
+	limit, err := strconv.ParseFloat(arg, 64)
+	if err != nil {
+		return "", fmt.Errorf("`%s` is not a valid number for lte operator", arg)
+	}
+	if val <= limit {
+		return line, nil
+	}
+	return "", nil
+}
+
+func handleEq(line, arg string) (string, error) {
+	val, err := strconv.ParseFloat(strings.TrimSpace(line), 64)
+	if err != nil {
+		return "", nil // Filter out non-numeric lines
+	}
+	limit, err := strconv.ParseFloat(arg, 64)
+	if err != nil {
+		return "", fmt.Errorf("`%s` is not a valid number for eq operator", arg)
+	}
+	if val == limit {
+		return line, nil
+	}
+	return "", nil
 }
 
 func handleCut(line, arg string) (string, error) {
