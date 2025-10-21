@@ -17,6 +17,7 @@ var index string
 var format string
 var mem int
 var help bool
+var exitOnError bool
 var pipelines [][]Command
 var pipelineNames []string
 var delimiter string
@@ -29,6 +30,7 @@ func init() {
 	flag.StringVar(&format, "format", "stdout", "format to be used for output, pipelines are printed in order")
 	flag.BoolVar(&help, "help", false, "shows help message")
 	flag.BoolVar(&help, "h", false, "shows help message")
+	flag.BoolVar(&exitOnError, "exit", true, "terminate execution immediately on first pipeline error")
 	flag.IntVar(&mem, "mem", 10, "Buffer size in MB")
 	flag.StringVar(&delimiter, "delimiter", "", "split input into a sequence of lines using a custom delimiter")
 	flag.StringVar(&joinDelimiter, "join", "", "join output using a custom delimiter. Writes to stdout")
@@ -123,8 +125,11 @@ func Run() {
 	for scanner.Scan() {
 		var results [][]string // match, name
 		for _, pipeline := range pipelines {
-			match, name := handle(scanner.Text(), pipeline)
-			if match != "" {
+			match, name, err := handle(scanner.Text(), pipeline)
+			if err != nil && exitOnError {
+				log.Fatalf("error processing line: %v", err)
+			}
+			if len(match) > 0 {
 				results = append(results, []string{match, name})
 			}
 		}
@@ -174,23 +179,24 @@ func Run() {
 	}
 }
 
-func handle(line string, cmds []Command) (string, string) {
-	match := ""
-	name := ""
+func handle(line string, cmds []Command) (string, string, error) {
 	cmd := cmds[0]
 
+	match, err := operators[cmd.Name].Operator(line, cmd.Arg)
+	if err != nil {
+		return "", "", err
+	}
+
+	var name string
 	if cmd.Name == "name" {
 		name = cmd.Arg
-		match = line
-	} else {
-		match = operators[cmd.Name].Operator(line, cmd.Arg)
 	}
 
 	if len(cmds) > 1 {
 		return handle(match, cmds[1:])
 	}
 
-	return match, name
+	return match, name, nil
 }
 
 func usage() {

@@ -25,6 +25,7 @@ func RegisterPrinter(name string, p printer) {
 
 var csvWriter *csv.Writer
 
+// BUG: should print delimiter also when there's no match
 func handleCsvPrint(results [][]string) {
 	if len(pipelineNames) != len(pipelines) {
 		// TODO: better error
