@@ -53,7 +53,7 @@ func init() {
 	flag.BoolVar(&help, "h", false, "shows help message")
 	flag.BoolVar(&exitOnError, "exit", true, "terminate execution immediately on first pipeline error")
 	flag.IntVar(&mem, "mem", 10, "Buffer size in MB")
-	flag.IntVar(&workers, "workers", 0, "number of parallel workers (0 = auto-detect CPU count)")
+	flag.IntVar(&workers, "workers", 1, "number of parallel workers (0 = auto, 1 = serial, >1 = parallel with N workers)")
 	flag.IntVar(&queueSize, "queue", 10000, "bounded job queue size for backpressure")
 	flag.StringVar(&delimiter, "delimiter", "", "split input into a sequence of lines using a custom delimiter")
 	flag.StringVar(&joinDelimiter, "join", "", "join output using a custom delimiter. Writes to stdout")
@@ -131,7 +131,6 @@ func Run() {
 
 	if stdoutBufferSize > 0 {
 		print = handleBufferedStdoutPrint
-		defer flushBufferedStdout()
 	}
 
 	usedMem := mem * 1024 * 1024
@@ -142,11 +141,6 @@ func Run() {
 		scanner.Split(ScanDelimiter(delimiter))
 	} else {
 		scanner.Split(bufio.ScanLines)
-	}
-
-	numWorkers := workers
-	if numWorkers <= 0 {
-		numWorkers = runtime.NumCPU()
 	}
 
 	sigChan := make(chan os.Signal, 1)
@@ -160,32 +154,10 @@ func Run() {
 		cancel() // trigger graceful shutdown
 	}()
 
-	jobsCh := make(chan Job, queueSize)
-	resultsCh := make(chan Result, numWorkers*2)
-
-	var wg sync.WaitGroup
-	for i := 0; i < numWorkers; i++ {
-		wg.Go(func() {
-			worker(ctx, jobsCh, resultsCh)
-		})
-	}
-
-	wg.Go(func() {
-		collector(ctx, resultsCh, print)
-	})
-
-	var seq int64
-	for scanner.Scan() {
-		select {
-		case <-ctx.Done():
-			return
-		case jobsCh <- Job{Seq: seq, Line: scanner.Text()}:
-			seq++
-		}
-	}
-
-	if stdoutBufferSize > 0 {
-		flushBufferedStdout()
+	if workers == 1 {
+		syncScan(scanner, print)
+	} else {
+		parallelScan(ctx, scanner, print)
 	}
 
 	// TODO: should be considered while scanning
@@ -194,7 +166,10 @@ func Run() {
 		cancel()
 	}
 
-	wg.Wait()
+	if stdoutBufferSize > 0 {
+		flushBufferedStdout()
+	}
+
 	if f != nil {
 		f.Close()
 	}
@@ -329,4 +304,67 @@ func usage() {
 			fmt.Println("        e.g.", entry.Example)
 		}
 	}
+}
+
+func syncScan(scanner *bufio.Scanner, print printer) {
+	for scanner.Scan() {
+		var results [][]string
+		for _, pipeline := range pipelines {
+			match, name, err := handle(scanner.Text(), pipeline)
+			if err != nil && exitOnError {
+				log.Fatalf("error processing line: %v", err)
+			}
+			if len(match) > 0 {
+				results = append(results, []string{match, name})
+			}
+		}
+
+		if len(pipelineNames) > 0 {
+			sortPipelines(results)
+		}
+
+		if index == "" {
+			print(results)
+		} else {
+			buffered := buffer(results)
+			if buffered != nil {
+				print(buffered)
+			}
+		}
+	}
+}
+
+func parallelScan(ctx context.Context, scanner *bufio.Scanner, print printer) {
+	numWorkers := workers
+	if numWorkers <= 0 {
+		numWorkers = runtime.NumCPU()
+	}
+
+	jobsCh := make(chan Job, queueSize)
+	resultsCh := make(chan Result, numWorkers*2)
+
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Go(func() {
+			worker(ctx, jobsCh, resultsCh)
+		})
+	}
+
+	go func() {
+		collector(ctx, resultsCh, print)
+	}()
+
+	var seq int64
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return
+		case jobsCh <- Job{Seq: seq, Line: scanner.Text()}:
+			seq++
+		}
+	}
+
+	close(jobsCh)
+	wg.Wait()
+	close(resultsCh)
 }

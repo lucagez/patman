@@ -19,7 +19,7 @@ func ScanDelimiter(delimiter string) func(data []byte, atEOF bool) (advance int,
 			return 0, nil, nil
 		}
 		if i := bytes.Index(data, d); i >= 0 {
-			return i + 1, dropDelimiter(data[0:i], d), nil
+			return i + len(d), dropDelimiter(data[0:i], d), nil
 		}
 		if atEOF {
 			return len(data), dropDelimiter(data, d), nil

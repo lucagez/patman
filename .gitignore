@@ -13,3 +13,4 @@ dist/
 *.tar.gz
 *.zip
 checksums.txt
+datasets/
