@@ -58,7 +58,6 @@ main() {
 
     DOWNLOAD_URL="https://github.com/lucagez/patman/releases/download/${VERSION}/${ARCHIVE_NAME}"
 
-    # Create temporary directory
     TMP_DIR=$(mktemp -d)
     trap "rm -rf $TMP_DIR" EXIT
 
@@ -72,7 +71,6 @@ main() {
         exit 1
     fi
 
-    # Extract archive
     cd "$TMP_DIR"
     if [ "${ARCHIVE_NAME##*.}" = "zip" ]; then
         unzip -q "$ARCHIVE_NAME"

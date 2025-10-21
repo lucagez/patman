@@ -2,15 +2,34 @@ package patman
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"regexp"
+	"runtime"
+	"slices"
 	"strings"
-
-	"golang.org/x/exp/slices"
+	"sync"
+	"syscall"
 )
+
+// Job represents the parallelizable unit of work happening at line level.
+// Each line is distributed to a worker and then handed back to a collector
+type Job struct {
+	Seq  int64
+	Line string
+}
+
+type Result struct {
+	Seq int64
+
+	// [{match, name}, ...]
+	Results [][]string
+	Err     error
+}
 
 var input string
 var index string
@@ -18,6 +37,8 @@ var format string
 var mem int
 var help bool
 var exitOnError bool
+var workers int
+var queueSize int
 var pipelines [][]Command
 var pipelineNames []string
 var delimiter string
@@ -32,6 +53,8 @@ func init() {
 	flag.BoolVar(&help, "h", false, "shows help message")
 	flag.BoolVar(&exitOnError, "exit", true, "terminate execution immediately on first pipeline error")
 	flag.IntVar(&mem, "mem", 10, "Buffer size in MB")
+	flag.IntVar(&workers, "workers", 0, "number of parallel workers (0 = auto-detect CPU count)")
+	flag.IntVar(&queueSize, "queue", 10000, "bounded job queue size for backpressure")
 	flag.StringVar(&delimiter, "delimiter", "", "split input into a sequence of lines using a custom delimiter")
 	flag.StringVar(&joinDelimiter, "join", "", "join output using a custom delimiter. Writes to stdout")
 	flag.IntVar(&stdoutBufferSize, "buffer", 0, "flush stdout in batches to increase performance")
@@ -79,28 +102,27 @@ func Run() {
 		}
 
 		if !indexPipeline {
-			fmt.Printf("index `%s` must have a matching named pipeline\n", index)
-			os.Exit(1)
+			log.Fatalf("index `%s` must have a matching named pipeline", index)
 		}
 	}
 
 	scanner := bufio.NewScanner(os.Stdin)
 
-	f, openFileErr := os.Open(input)
-	if openFileErr == nil {
+	var f *os.File
+	if len(input) > 0 {
+		var err error
+		f, err = os.Open(input)
+		if err != nil {
+			log.Fatalf("failed to open input: %v", err)
+		}
 		scanner = bufio.NewScanner(f)
 	}
 
-	var print printer
+	print := handleCustomFormatPrint
 	for name, p := range printers {
 		if name == format {
 			print = p
 		}
-	}
-
-	// using custom formats in all other cases
-	if print == nil && format != "" {
-		print = handleCustomFormatPrint
 	}
 
 	if joinDelimiter != "" {
@@ -122,61 +144,149 @@ func Run() {
 		scanner.Split(bufio.ScanLines)
 	}
 
+	numWorkers := workers
+	if numWorkers <= 0 {
+		numWorkers = runtime.NumCPU()
+	}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		<-sigChan
+		cancel() // trigger graceful shutdown
+	}()
+
+	jobsCh := make(chan Job, queueSize)
+	resultsCh := make(chan Result, numWorkers*2)
+
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Go(func() {
+			worker(ctx, jobsCh, resultsCh)
+		})
+	}
+
+	wg.Go(func() {
+		collector(ctx, resultsCh, print)
+	})
+
+	var seq int64
 	for scanner.Scan() {
-		var results [][]string // match, name
-		for _, pipeline := range pipelines {
-			match, name, err := handle(scanner.Text(), pipeline)
-			if err != nil && exitOnError {
-				log.Fatalf("error processing line: %v", err)
-			}
-			if len(match) > 0 {
-				results = append(results, []string{match, name})
-			}
-		}
-
-		if len(pipelineNames) > 0 {
-			// TODO: Double check if sorting is broken after generics
-			slices.SortFunc(results, func(a, b []string) int {
-				// Unnamed pipelines should be pushed last
-				aIndex := -1
-				bIndex := -1
-				for i, name := range pipelineNames {
-					if name == a[1] {
-						aIndex = i
-					}
-					if name == b[1] {
-						bIndex = i
-					}
-				}
-				if aIndex < 0 {
-					return 1
-				}
-				if bIndex < 0 {
-					return -1
-				}
-				return aIndex - bIndex
-			})
-		}
-
-		// do not perform in memory buffering if no index is provided
-		if index == "" {
-			print(results)
-			continue
-		}
-
-		buffered := buffer(results)
-		if buffered != nil {
-			print(buffered)
+		select {
+		case <-ctx.Done():
+			return
+		case jobsCh <- Job{Seq: seq, Line: scanner.Text()}:
+			seq++
 		}
 	}
 
+	if stdoutBufferSize > 0 {
+		flushBufferedStdout()
+	}
+
+	// TODO: should be considered while scanning
 	if err := scanner.Err(); err != nil {
-		panic(err)
+		log.Printf("scanner error: %v", err)
+		cancel()
 	}
 
-	if openFileErr == nil {
+	wg.Wait()
+	if f != nil {
 		f.Close()
 	}
+}
+
+func collector(ctx context.Context, results <-chan Result, print printer) {
+	ordering := make(map[int64][][]string)
+
+	var seq int64
+	for result := range results {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if result.Err != nil && exitOnError {
+				log.Fatalf("error processing line %d: %v", result.Seq, result.Err)
+			}
+
+			ordering[result.Seq] = result.Results
+
+			for {
+				results, exists := ordering[seq]
+				if !exists {
+					break
+				}
+
+				if index == "" {
+					print(results)
+				} else {
+					buffered := buffer(results)
+					if buffered != nil {
+						print(buffered)
+					}
+				}
+
+				// clean up to avoid growing memory usage of ordering
+				// buffer in case of many pending pipelines
+				delete(ordering, seq)
+				seq++
+			}
+		}
+	}
+}
+
+func worker(ctx context.Context, jobsCh <-chan Job, resultsCh chan<- Result) {
+	for job := range jobsCh {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			var results [][]string
+			for _, pipeline := range pipelines {
+				match, name, err := handle(job.Line, pipeline)
+				if err != nil && exitOnError {
+					resultsCh <- Result{Seq: job.Seq, Results: nil, Err: err}
+					return
+				}
+				if len(match) > 0 {
+					results = append(results, []string{match, name})
+				}
+			}
+
+			if len(pipelineNames) > 0 {
+				sortPipelines(results)
+			}
+
+			resultsCh <- Result{Seq: job.Seq, Results: results, Err: nil}
+		}
+	}
+}
+
+func sortPipelines(results [][]string) {
+	slices.SortFunc(results, func(a, b []string) int {
+		// Unnamed pipelines should be pushed last
+		aIndex := -1
+		bIndex := -1
+		for i, name := range pipelineNames {
+			if name == a[1] {
+				aIndex = i
+			}
+			if name == b[1] {
+				bIndex = i
+			}
+		}
+		if aIndex < 0 {
+			return 1
+		}
+		if bIndex < 0 {
+			return -1
+		}
+		return aIndex - bIndex
+	})
 }
 
 func handle(line string, cmds []Command) (string, string, error) {

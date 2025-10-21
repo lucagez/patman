@@ -2,30 +2,32 @@ package patman
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"sync"
+
 	"github.com/dop251/goja"
 )
 
-var regexCache = map[string]*regexp.Regexp{}
+var regexCache = sync.Map{} // map[string]*regexp.Regexp
 
 func regex(pattern string) *regexp.Regexp {
-	if regex, ok := regexCache[pattern]; ok {
-		return regex
+	if cached, ok := regexCache.Load(pattern); ok {
+		return cached.(*regexp.Regexp)
 	}
 
-	regex, err := regexp.Compile(pattern)
+	re, err := regexp.Compile(pattern)
 	if err != nil {
-		fmt.Printf("`%s` is not a valid regexp pattern\n", pattern)
-		os.Exit(1)
+		log.Fatalf("`%s` is not a valid regexp pattern", pattern)
 	}
 
-	regexCache[pattern] = regex
+	regexCache.Store(pattern, re)
 
-	return regex
+	return re
 }
 
 type OperatorEntry struct {
