@@ -206,6 +206,41 @@ Removes duplicate lines (keeps first occurrence).
 cat logs.txt | patman 'ml(error) |> uniq(_)'
 ```
 
+#### gt
+Filters lines that are numerically greater than the provided number.
+**Usage:**
+```bash
+echo 101 | patman 'gt(100)' # 101
+```
+
+#### gte
+Filters lines that are numerically greater than or equal to the provided number.
+**Usage:**
+```bash
+echo 100 | patman 'gte(100)' # 100
+```
+
+#### lt
+Filters lines that are numerically less than the provided number.
+**Usage:**
+```bash
+echo 99 | patman 'lt(100)' # 99
+```
+
+#### lte
+Filters lines that are numerically less than or equal to the provided number.
+**Usage:**
+```bash
+echo 100 | patman 'lte(100)' # 100
+```
+
+#### eq
+Filters lines that are numerically equal to the provided number.
+**Usage:**
+```bash
+echo 100 | patman 'eq(100)' # 100
+```
+
 #### js
 Executes a JavaScript expression, passing `x` as the argument.
 **Usage:** 
