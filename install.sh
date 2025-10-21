@@ -50,6 +50,7 @@ main() {
         BINARY_NAME="patman_${OS}_${ARCH}"
     fi
 
+    ARCHIVE_NAME="${BINARY_NAME}.tar.gz"
     DOWNLOAD_URL="https://github.com/lucagez/patman/releases/download/${VERSION}/${ARCHIVE_NAME}"
 
     TMP_DIR=$(mktemp -d)
